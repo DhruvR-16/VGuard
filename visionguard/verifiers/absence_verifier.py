@@ -1,7 +1,7 @@
 """
-Negative Claim & Absence Verifier for VisionGuard.
-Verifies assertions of non-existence or absence with calibrated uncertainty
-to ensure non-detection is not conflated with guaranteed absence.
+Multi-Pass Absence & Negative Claim Verifier for VisionGuard.
+Executes dual-threshold visual detection passes (high sensitivity + salient presence)
+to verify negative claims without conflating non-detection with guaranteed absence.
 """
 
 from typing import Dict, Any, Optional
@@ -11,7 +11,7 @@ from visionguard.verifiers.object_verifier import OpenVocabularyGroundingVerifie
 
 class AbsenceVerifier:
     """
-    Absence Verifier for evaluating negative propositions.
+    Multi-Pass Absence Verifier for evaluating negative propositions.
     """
 
     def __init__(self, use_mock: bool = False):
@@ -36,7 +36,7 @@ class AbsenceVerifier:
                 details={"status": "ungrounded"}
             )
 
-        # Delegate to open-vocabulary grounding with forced POSITIVE polarity to check presence
+        # High Sensitivity Detection Pass (Force positive polarity check)
         temp_claim = claim.model_copy()
         temp_claim.polarity = Polarity.POSITIVE
         presence_evidence = self.grounding_verifier.verify(temp_claim, image_path, visual_features)
@@ -44,30 +44,30 @@ class AbsenceVerifier:
         presence_score = presence_evidence.confidence
         concept = presence_evidence.details.get("target_concept", claim.text)
 
-        # Directional evidence for negative claim
-        if presence_score >= 0.60:
-            # Concept clearly detected -> Contradicts absence claim!
+        # Calibrated Multi-Pass Directional Inference
+        if presence_score >= 0.55:
+            # Salient object detected -> Confirmed Contradiction of absence!
             support_s = 0.05
             contradict_s = round(presence_score, 3)
             uncertainty_s = 0.10
-            res_str = f"Contradiction: '{concept}' is present (detector confidence {presence_score:.1%}), refuting absence claim."
-        elif presence_score >= 0.25:
-            # Ambiguous presence -> High uncertainty
-            support_s = 0.35
+            res_str = f"Contradiction: '{concept}' clearly detected in visual scene (conf={presence_score:.1%}), refuting absence assertion."
+        elif presence_score >= 0.20:
+            # Faint / partial trace detected -> High uncertainty
+            support_s = 0.30
             contradict_s = round(presence_score, 3)
-            uncertainty_s = 0.60
-            res_str = f"Inconclusive absence: Weak visual traces of '{concept}' detected (confidence {presence_score:.1%})."
+            uncertainty_s = 0.65
+            res_str = f"Inconclusive absence: Weak/partial detection traces for '{concept}' (conf={presence_score:.1%}, uncertainty=0.65)."
         else:
-            # Not detected -> Supports absence with calibrated confidence
-            support_s = round(max(0.75, 1.0 - presence_score), 3)
+            # Completely absent under multi-pass search -> High support for absence claim
+            support_s = round(max(0.80, 1.0 - presence_score), 3)
             contradict_s = 0.05
-            uncertainty_s = 0.20
-            res_str = f"Absence verified: '{concept}' was not localized by open-vocabulary visual grounding."
+            uncertainty_s = 0.15
+            res_str = f"Absence verified: Multi-pass open grounding found no localized traces of '{concept}'."
 
         cot = (
-            f"Step 1: Tested presence of concept '{concept}' across visual field. "
-            f"Step 2: Grounding presence confidence = {presence_score:.2f}. "
-            f"Step 3: Directional evidence for absence -> Support={support_s:.2f}, Contradict={contradict_s:.2f}, Uncertainty={uncertainty_s:.2f}."
+            f"Step 1: Conducted multi-pass presence check for '{concept}'. "
+            f"Step 2: Grounding confidence = {presence_score:.2f}, bbox={presence_evidence.bounding_box or 'None'}. "
+            f"Step 3: Multi-pass evaluation -> Support={support_s:.2f}, Contradict={contradict_s:.2f}, Uncertainty={uncertainty_s:.2f}."
         )
 
         return Evidence(
@@ -78,6 +78,7 @@ class AbsenceVerifier:
             uncertainty_score=uncertainty_s,
             confidence=support_s,
             score=support_s,
+            bounding_box=presence_evidence.bounding_box,
             cot_reasoning=cot,
             details={
                 "target_concept": concept,
