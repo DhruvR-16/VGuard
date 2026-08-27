@@ -98,10 +98,10 @@ def main():
         from visionguard.eval.experiment_guardrail import GuardrailEffectivenessExperiment
 
         samples = get_sample_dataset()
-        exp1 = ClaimClassificationExperiment(use_mock=True).run_experiment(samples)
-        exp4 = RobustnessExperiment(use_mock=True).run_experiment(samples)
-        exp5 = HumanAlignmentExperiment().run_experiment(300)
-        exp6 = GuardrailEffectivenessExperiment(use_mock=True).run_experiment(samples)
+        exp1 = ClaimClassificationExperiment(use_mock=False).run_experiment(samples)
+        exp4 = RobustnessExperiment(use_mock=False).run_experiment(samples)
+        exp5 = HumanAlignmentExperiment(use_mock=False).run_experiment(samples)
+        exp6 = GuardrailEffectivenessExperiment(use_mock=False).run_experiment(samples)
 
         print("\n=== VisionGuard 6-Experiment Suite Results ===")
         print(json.dumps({

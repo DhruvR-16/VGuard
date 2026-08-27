@@ -45,7 +45,7 @@ def test_repair_endpoint():
 
 def test_adversarial_endpoint():
     payload = {
-        "claims": ["A man is riding a bicycle.", "The car is red."]
+        "claims": ["A violinist is playing a cello.", "The car is blue."]
     }
     response = client.post("/api/adversarial/generate", json=payload)
     assert response.status_code == 200

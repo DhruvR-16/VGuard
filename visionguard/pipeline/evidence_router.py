@@ -1,10 +1,10 @@
 """
 Specialized Verifier Router for VisionGuard.
-Routes atomic claims across the 12-class taxonomy to specialized primary and secondary verifiers.
+Routes atomic claims across open-domain taxonomy types to domain-specialized verifiers.
 """
 
 from typing import List, Dict, Any, Optional
-from visionguard.schemas import AtomicClaim, ClaimType, Evidence
+from visionguard.schemas import AtomicClaim, ClaimType, Evidence, Polarity
 from visionguard.verifiers.object_verifier import OpenVocabularyGroundingVerifier
 from visionguard.verifiers.attribute_verifier import AttributeVerifier
 from visionguard.verifiers.spatial_verifier import SpatialVerifier
@@ -16,7 +16,7 @@ from visionguard.verifiers.absence_verifier import AbsenceVerifier
 
 class EvidenceRouter:
     """
-    Routes atomic claims to domain-specialized verifiers according to the 12-class taxonomy.
+    Routes atomic claims to domain-specialized verifiers.
     """
 
     def __init__(self, use_mock: bool = False):
@@ -34,12 +34,15 @@ class EvidenceRouter:
         image_path: Optional[str] = None,
         visual_features: Optional[Dict[str, Any]] = None
     ) -> List[Evidence]:
-        """
-        Gathers multi-source evidence based on claim type.
-        """
         evidences: List[Evidence] = []
 
-        if claim.type == ClaimType.OBJECT_EXISTENCE:
+        # Negative claims route to AbsenceVerifier
+        if claim.polarity == Polarity.NEGATIVE:
+            evidences.append(self.absence_verifier.verify(claim, image_path, visual_features))
+            evidences.append(self.object_verifier.verify(claim, image_path, visual_features))
+            return evidences
+
+        if claim.type in [ClaimType.OBJECT_EXISTENCE, ClaimType.IDENTITY]:
             evidences.append(self.object_verifier.verify(claim, image_path, visual_features))
 
         elif claim.type == ClaimType.OBJECT_COUNT:
@@ -72,11 +75,7 @@ class EvidenceRouter:
         elif claim.type == ClaimType.SCENE:
             evidences.append(self.scene_verifier.verify(claim, image_path, visual_features))
 
-        elif claim.type == ClaimType.NEGATIVE_CLAIM:
-            evidences.append(self.absence_verifier.verify(claim, image_path, visual_features))
-            evidences.append(self.object_verifier.verify(claim, image_path, visual_features))
-
-        elif claim.type == ClaimType.OUT_OF_SCOPE:
+        elif claim.type == ClaimType.EXTERNAL_KNOWLEDGE:
             evidences.append(self.scene_verifier.verify(claim, image_path, visual_features))
 
         else:

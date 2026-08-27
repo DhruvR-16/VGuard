@@ -1,67 +1,87 @@
 """
-Absence & Negative Claim Verifier for VisionGuard.
-Verifies negative assertions (e.g., 'There are no cars', 'The man is not wearing a hat')
-by evaluating the non-existence / absence of target concepts in the image.
+Negative Claim & Absence Verifier for VisionGuard.
+Verifies assertions of non-existence or absence with calibrated uncertainty
+to ensure non-detection is not conflated with guaranteed absence.
 """
 
 from typing import Dict, Any, Optional
-from visionguard.schemas import AtomicClaim, Evidence
+from visionguard.schemas import AtomicClaim, Evidence, Polarity
+from visionguard.verifiers.object_verifier import OpenVocabularyGroundingVerifier
 
 
 class AbsenceVerifier:
     """
-    Evaluates negative claims asserting non-existence or absence.
+    Absence Verifier for evaluating negative propositions.
     """
 
     def __init__(self, use_mock: bool = False):
         self.use_mock = use_mock
+        self.grounding_verifier = OpenVocabularyGroundingVerifier(use_mock=use_mock)
 
-    def verify(self, claim: AtomicClaim, image_path: Optional[str] = None, visual_features: Optional[Dict[str, Any]] = None) -> Evidence:
-        subj = claim.linguistic_structure.subject if claim.linguistic_structure else "object"
-
-        if visual_features is None:
+    def verify(
+        self,
+        claim: AtomicClaim,
+        image_path: Optional[str] = None,
+        visual_features: Optional[Dict[str, Any]] = None
+    ) -> Evidence:
+        if visual_features is None and image_path is None:
             return Evidence(
                 source="absence_verifier",
                 result="No visual context provided",
-                score=0.0,
-                cot_reasoning="No image input provided for absence verification.",
+                support_score=0.0,
+                contradiction_score=0.0,
+                uncertainty_score=1.0,
+                confidence=0.0,
+                cot_reasoning="No image context provided for absence verification.",
                 details={"status": "ungrounded"}
             )
 
-        detected_objects = visual_features.get("objects", {})
-        open_vocab_detections = visual_features.get("open_vocab_detections", {})
-        all_objects = {**detected_objects, **open_vocab_detections}
+        # Delegate to open-vocabulary grounding with forced POSITIVE polarity to check presence
+        temp_claim = claim.model_copy()
+        temp_claim.polarity = Polarity.POSITIVE
+        presence_evidence = self.grounding_verifier.verify(temp_claim, image_path, visual_features)
 
-        # Check if the supposedly absent concept is actually present
-        detected_presence_score = 0.0
-        for obj_name, conf in all_objects.items():
-            if obj_name in subj.lower() or subj.lower() in obj_name:
-                detected_presence_score = max(detected_presence_score, float(conf))
+        presence_score = presence_evidence.confidence
+        concept = presence_evidence.details.get("target_concept", claim.text)
 
-        # Invert score: High absence confidence = low presence
-        if detected_presence_score > 0.50:
-            absence_score = 0.10 # Concept IS present, so negative claim is false!
-            result_str = f"Concept '{subj}' is PRESENT in image (presence score {detected_presence_score:.2f}). Negative claim contradicted."
+        # Directional evidence for negative claim
+        if presence_score >= 0.60:
+            # Concept clearly detected -> Contradicts absence claim!
+            support_s = 0.05
+            contradict_s = round(presence_score, 3)
+            uncertainty_s = 0.10
+            res_str = f"Contradiction: '{concept}' is present (detector confidence {presence_score:.1%}), refuting absence claim."
+        elif presence_score >= 0.25:
+            # Ambiguous presence -> High uncertainty
+            support_s = 0.35
+            contradict_s = round(presence_score, 3)
+            uncertainty_s = 0.60
+            res_str = f"Inconclusive absence: Weak visual traces of '{concept}' detected (confidence {presence_score:.1%})."
         else:
-            absence_score = 0.92 # Concept is truly absent!
-            result_str = f"Concept '{subj}' confirmed ABSENT from image. Negative claim supported."
+            # Not detected -> Supports absence with calibrated confidence
+            support_s = round(max(0.75, 1.0 - presence_score), 3)
+            contradict_s = 0.05
+            uncertainty_s = 0.20
+            res_str = f"Absence verified: '{concept}' was not localized by open-vocabulary visual grounding."
 
         cot = (
-            f"Step 1: Identified negative claim asserting absence of '{subj}'. "
-            f"Step 2: Scanned visual features for presence of '{subj}' (detected presence = {detected_presence_score:.2f}). "
-            f"Step 3: Calculated absence verification score = {absence_score:.2f}. "
-            f"Verdict: {'ABSENCE_CONFIRMED' if absence_score >= 0.6 else 'PRESENCE_DETECTED_CONTRADICTED'}."
+            f"Step 1: Tested presence of concept '{concept}' across visual field. "
+            f"Step 2: Grounding presence confidence = {presence_score:.2f}. "
+            f"Step 3: Directional evidence for absence -> Support={support_s:.2f}, Contradict={contradict_s:.2f}, Uncertainty={uncertainty_s:.2f}."
         )
 
         return Evidence(
             source="absence_verifier",
-            result=result_str,
-            score=round(absence_score, 3),
+            result=res_str,
+            support_score=support_s,
+            contradiction_score=contradict_s,
+            uncertainty_score=uncertainty_s,
+            confidence=support_s,
+            score=support_s,
             cot_reasoning=cot,
             details={
-                "target_concept": subj,
-                "detected_presence_score": detected_presence_score,
-                "absence_score": absence_score,
-                "verifier_type": "Absence_Negative_Claim_Verifier"
+                "target_concept": concept,
+                "presence_confidence": round(presence_score, 3),
+                "bbox": presence_evidence.bounding_box
             }
         )

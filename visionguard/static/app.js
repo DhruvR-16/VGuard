@@ -6,6 +6,22 @@
 let selectedFile = null;
 let currentSampleFeatures = null;
 
+function escapeHtml(value) {
+    const entities = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;'
+    };
+    return String(value ?? '').replace(/[&<>"']/g, char => entities[char]);
+}
+
+function verdictClass(value) {
+    const allowed = new Set(['Supported', 'Contradicted', 'Insufficient_Evidence', 'Out_Of_Scope', 'Uncertain', 'Unverifiable']);
+    return allowed.has(value) ? value : '';
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     initNavigation();
     initFileUploadAndDropzone();
@@ -184,6 +200,9 @@ async function runCAMVAnalysis() {
                 body: formData
             });
             data = await res.json();
+            if (!res.ok) {
+                throw new Error(data.detail || 'Failed to analyze uploaded image.');
+            }
         } else {
             const res = await fetch('/api/analyze', {
                 method: 'POST',
@@ -196,12 +215,15 @@ async function runCAMVAnalysis() {
                 })
             });
             data = await res.json();
+            if (!res.ok) {
+                throw new Error(data.detail || 'Failed to analyze response.');
+            }
         }
 
         renderAnalysisResults(data);
     } catch (err) {
         console.error("Analysis API failed:", err);
-        alert("Failed to analyze image/response. Check server status.");
+        alert(err.message || "Failed to analyze image/response. Check server status.");
     } finally {
         btn.disabled = false;
         btn.innerText = 'Run CAM-V Analysis';
@@ -214,7 +236,7 @@ function renderAnalysisResults(data) {
     const subtitle = document.getElementById('overall-confidence');
 
     title.innerText = data.overall_verdict;
-    title.className = `verdict-title ${data.overall_verdict}`;
+    title.className = `verdict-title ${verdictClass(data.overall_verdict)}`;
     subtitle.innerText = `Overall Confidence: ${(data.overall_confidence * 100).toFixed(1)}% | Hallucination Risk: ${(data.hallucination_probability * 100).toFixed(1)}%`;
 
     document.getElementById('main-hal-rate').innerText = `${(data.decomposed_metrics.main_hal_rate * 100).toFixed(0)}%`;
@@ -234,31 +256,36 @@ function renderAnalysisResults(data) {
         card.className = 'claim-card';
 
         const ling = item.claim.linguistic_structure || {};
-        const lingStr = `Subject: ${ling.subject || 'N/A'} | Action: ${ling.predicate || 'N/A'} | Target: ${ling.target_object || 'None'} | Modifiers: [${(ling.modifiers || []).join(', ') || 'None'}]`;
-        const depStr = (item.claim.dependencies && item.claim.dependencies.length > 0) ? `Depends on: [${item.claim.dependencies.join(', ')}]` : 'Root Entity';
+        const lingStr = escapeHtml(`Subject: ${ling.subject || 'N/A'} | Action: ${ling.predicate || 'N/A'} | Target: ${ling.target_object || 'None'} | Modifiers: [${(ling.modifiers || []).join(', ') || 'None'}]`);
+        const depStr = escapeHtml((item.claim.dependencies && item.claim.dependencies.length > 0) ? `Depends on: [${item.claim.dependencies.join(', ')}]` : 'Root Entity');
+        const claimText = escapeHtml(item.claim.text);
+        const claimType = escapeHtml(item.claim.type);
+        const explanation = escapeHtml(item.explanation);
+        const itemVerdict = escapeHtml(item.verdict);
+        const itemVerdictClass = verdictClass(item.verdict);
 
         const evidencesHtml = (item.evidences || []).map(e => `
             <div class="evidence-pill">
-                <span>${e.source}:</span>
+                <span>${escapeHtml(e.source)}:</span>
                 <span class="evidence-score">${(e.score * 100).toFixed(0)}%</span>
             </div>
         `).join('');
 
-        const cotLogsHtml = (item.deep_diagnostics && item.deep_diagnostics.cot_logs || []).map(log => `<li style="margin-bottom:0.3rem;">${log}</li>`).join('');
-        const formulaStr = item.fusion_math ? item.fusion_math.formula : 'Score = Multi-verifier weighted sum';
+        const cotLogsHtml = (item.deep_diagnostics && item.deep_diagnostics.cot_logs || []).map(log => `<li style="margin-bottom:0.3rem;">${escapeHtml(log)}</li>`).join('');
+        const formulaStr = escapeHtml(item.fusion_math ? item.fusion_math.formula : 'Score = Multi-verifier weighted sum');
 
         card.innerHTML = `
             <div class="claim-header">
                 <div>
                     <span class="claim-id">${item.claim.claim_id}</span>
-                    <span class="claim-type-badge">${item.claim.type}</span>
+                    <span class="claim-type-badge">${claimType}</span>
                     ${item.claim.polarity === 'negative' ? '<span class="claim-type-badge" style="color:var(--contradicted);">[NEGATION]</span>' : ''}
-                    <strong style="margin-left:0.5rem;">"${item.claim.text}"</strong>
+                    <strong style="margin-left:0.5rem;">"${claimText}"</strong>
                 </div>
-                <span class="verdict-badge ${item.verdict}">${item.verdict}</span>
+                <span class="verdict-badge ${itemVerdictClass}">${itemVerdict}</span>
             </div>
 
-            <p style="font-size:0.82rem; color:var(--text-muted); margin-bottom:0.5rem;">${item.explanation}</p>
+            <p style="font-size:0.82rem; color:var(--text-muted); margin-bottom:0.5rem;">${explanation}</p>
 
             <div class="evidences-list">
                 <span style="font-size:0.75rem; color:var(--text-muted); align-self:center;">Multi-Verifier Evidence:</span>
@@ -314,11 +341,11 @@ function renderAnalysisResults(data) {
                 <span class="verdict-badge Supported">Re-Verified (Score ${(data.repaired_response.re_verified_confidence * 100).toFixed(0)}%)</span>
             </div>
             <div style="background:rgba(255,255,255,0.02); padding:0.8rem; border-radius:6px; border:1px solid var(--border-color); margin-top:0.5rem; font-size:0.88rem; color:var(--text-main);">
-                "${data.repaired_response.repaired_text}"
+                "${escapeHtml(data.repaired_response.repaired_text)}"
             </div>
             <div style="font-size:0.78rem; color:var(--text-muted); margin-top:0.6rem;">
                 <strong>Removed Contradicted Claims:</strong>
-                <span style="color:var(--contradicted);">${data.repaired_response.removed_claims.join(', ')}</span>
+                <span style="color:var(--contradicted);">${escapeHtml(data.repaired_response.removed_claims.join(', '))}</span>
             </div>
         `;
         container.appendChild(repairCard);
@@ -337,9 +364,9 @@ async function loadHQMTable() {
             const tr = document.createElement('tr');
             if (item.name.includes("HQH")) tr.style.fontWeight = 'bold';
             tr.innerHTML = `
-                <td>${item.name}</td>
-                <td>${item.task}</td>
-                <td>${item.metric}</td>
+                <td>${escapeHtml(item.name)}</td>
+                <td>${escapeHtml(item.task)}</td>
+                <td>${escapeHtml(item.metric)}</td>
                 <td style="color:${item.test_retest > 0.95 ? 'var(--supported)' : 'var(--contradicted)'}">${item.test_retest.toFixed(4)}</td>
                 <td style="color:${item.parallel_forms > 0.90 ? 'var(--supported)' : 'var(--contradicted)'}">${item.parallel_forms.toFixed(4)}</td>
                 <td>${(item.content_validity * 100).toFixed(0)}%</td>
@@ -366,7 +393,7 @@ async function loadLeaderboard() {
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td>#${row.rank}</td>
-                <td><strong>${row.model}</strong></td>
+                <td><strong>${escapeHtml(row.model)}</strong></td>
                 <td>${(row.main_hal_rate * 100).toFixed(1)}%</td>
                 <td>${row.extra_hal_count.toFixed(3)}</td>
                 <td><span class="verdict-badge ${row.overall_hal_rate < 0.45 ? 'Supported' : 'Contradicted'}">${(row.overall_hal_rate * 100).toFixed(1)}%</span></td>
@@ -500,18 +527,18 @@ function initGuardrailDemo() {
             box.innerHTML = `
                 <div style="margin-bottom:0.8rem;">
                     <strong>Decorated Prompt (Task ID injected):</strong><br>
-                    <code style="color:#ffffff; font-family:var(--font-mono);">${data.decorated_prompt}</code>
+                    <code style="color:#ffffff; font-family:var(--font-mono);">${escapeHtml(data.decorated_prompt)}</code>
                 </div>
                 <div style="margin-bottom:0.8rem;">
                     <strong>Constrained Repaired Response:</strong><br>
                     <div style="background:var(--supported-bg); border:1px solid var(--supported); padding:0.8rem; border-radius:6px; margin-top:0.3rem; color:var(--text-main);">
-                        ${data.mitigated_response}
+                        ${escapeHtml(data.mitigated_response)}
                     </div>
                 </div>
                 <div>
                     <strong>Removed Contradicted Claims:</strong>
                     <ul style="color:var(--contradicted); margin-left:1.2rem; font-size:0.82rem; margin-top:0.3rem;">
-                        ${data.removed_claims.map(c => `<li>${c}</li>`).join('') || '<li>None</li>'}
+                        ${data.removed_claims.map(c => `<li>${escapeHtml(c)}</li>`).join('') || '<li>None</li>'}
                     </ul>
                 </div>
             `;
