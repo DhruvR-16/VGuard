@@ -19,7 +19,7 @@ class EvidenceFusionEngine:
         self.mode = mode
         self.weights = {
             ClaimType.OBJECT_EXISTENCE: {"open_vocab_grounding": 0.85, "vlm_scene_context": 0.15},
-            ClaimType.OBJECT_COUNT: {"open_vocab_grounding": 0.65, "spatial_geometry_verifier": 0.35},
+            ClaimType.OBJECT_COUNT: {"count_verifier": 0.80, "open_vocab_grounding": 0.20},
             ClaimType.COLOR: {"clip_attribute_similarity": 0.75, "open_vocab_grounding": 0.25},
             ClaimType.ATTRIBUTE: {"clip_attribute_similarity": 0.75, "open_vocab_grounding": 0.25},
             ClaimType.ACTION: {"action_interaction_vlm": 0.75, "spatial_geometry_verifier": 0.25},
@@ -42,6 +42,10 @@ class EvidenceFusionEngine:
     ) -> Tuple[float, float, float, FusionMath]:
         """
         Fuses directional distributions across gathered evidence.
+        Modes:
+        - 'claim_aware': Claim-type specific weighted combination
+        - 'uniform': Equal weighting across all gathered evidences
+        - 'single': Primary single verifier only (No multi-evidence fusion)
         Returns: (fused_support_score, fused_contradict_score, fused_uncertainty_score, FusionMath).
         """
         if not evidences:
@@ -56,6 +60,25 @@ class EvidenceFusionEngine:
             )
             return 0.0, 0.0, 1.0, math_obj
 
+        # Mode: Single Verifier (Ablation A2: w/o Multi-Evidence Fusion)
+        if self.mode == "single":
+            primary_e = evidences[0]
+            math_obj = FusionMath(
+                formula=f"Single Verifier ({primary_e.source}): Support={primary_e.support_score:.3f} | Contradict={primary_e.contradiction_score:.3f} | Uncertainty={primary_e.uncertainty_score:.3f}",
+                weight_breakdown={primary_e.source: 1.0},
+                raw_scores={primary_e.source: primary_e.support_score},
+                support_fused=round(primary_e.support_score, 3),
+                contradict_fused=round(primary_e.contradiction_score, 3),
+                uncertainty_fused=round(primary_e.uncertainty_score, 3),
+                fused_score=round(primary_e.support_score, 3)
+            )
+            return (
+                round(primary_e.support_score, 3),
+                round(primary_e.contradiction_score, 3),
+                round(primary_e.uncertainty_score, 3),
+                math_obj
+            )
+
         claim_weights = self.weights.get(claim.type, {"default": 1.0})
         total_w = 0.0
         weighted_support = 0.0
@@ -67,7 +90,12 @@ class EvidenceFusionEngine:
         terms = []
 
         for e in evidences:
-            w = claim_weights.get(e.source, 0.50) if self.mode != "uniform" else (1.0 / len(evidences))
+            if self.mode == "uniform":
+                w = 1.0 / len(evidences)
+            else:
+                # claim_aware
+                w = claim_weights.get(e.source, 0.50)
+
             active_weights[e.source] = round(w, 3)
             raw_scores[e.source] = round(e.support_score, 3)
 

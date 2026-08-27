@@ -1,22 +1,24 @@
 """
 Scene & Semantic Verifiability Verifier for VisionGuard.
-Classifies global scene context and identifies external non-visual assertions
-(historical metadata, photographer identity, internal mental states, ungrounded coordinates)
-without brittle hardcoded keyword lists.
+Classifies global scene context using real CLIP zero-shot scene classification
+and identifies external non-visual assertions (historical metadata, creator identity,
+internal mental states, ungrounded coordinates).
 """
 
 import re
 from typing import Dict, Any, Optional, Tuple, List
 from visionguard.schemas import AtomicClaim, Evidence, ClaimType, Verifiability
+from visionguard.models.registry import registry
 
 
 class SceneVerifier:
     """
-    Scene & Out-of-Scope Verifier with semantic verifiability classification.
+    Scene & Out-of-Scope Verifier with CLIP scene classification and semantic verifiability assessment.
     """
 
     def __init__(self, use_mock: bool = False):
         self.use_mock = use_mock
+        self.registry = registry
 
     def verify(
         self,
@@ -26,7 +28,7 @@ class SceneVerifier:
     ) -> Evidence:
         claim_text = claim.text.lower()
 
-        if visual_features is None:
+        if visual_features is None and image_path is None:
             return Evidence(
                 source="vlm_scene_context",
                 result="No visual context provided",
@@ -52,13 +54,39 @@ class SceneVerifier:
                 details={"is_out_of_scope": True, "rationale": external_reason}
             )
 
-        # 2. Semantic Environment Matching
-        scene_info = visual_features.get("scene", {})
-        is_outdoor = scene_info.get("is_outdoor", False) if isinstance(scene_info, dict) else False
-        scene_type = scene_info.get("type", "scene background") if isinstance(scene_info, dict) else str(scene_info)
+        # 2. Real CLIP Scene Classification or Features Fallback
+        image_obj = visual_features.get("image_obj") if visual_features else None
+        target_image = image_obj or image_path
 
-        outdoor_indicators = ["outdoor", "park", "nature", "field", "yard", "snow", "road", "street", "beach", "sky", "forest", "mountain", "cliff", "ocean"]
-        indoor_indicators = ["indoor", "room", "kitchen", "office", "desk", "bedroom", "living room", "concert hall", "coffee bar", "library"]
+        scene_type = "general scene"
+        is_outdoor = True
+        clip_ran = False
+
+        if target_image is not None and not self.use_mock:
+            candidates = [
+                "an outdoor park or nature scene",
+                "an urban city street scene",
+                "an indoor office with desks and computers",
+                "an indoor kitchen or dining room",
+                "an outdoor sports field",
+                "a natural mountain or lake landscape",
+                "an art gallery or museum room",
+                "an indoor room"
+            ]
+            probs = self.registry.run_clip_attribute_classification(target_image, candidates)
+            if probs:
+                top_scene = max(probs.items(), key=lambda x: x[1])[0]
+                scene_type = top_scene
+                is_outdoor = "outdoor" in top_scene or "street" in top_scene or "landscape" in top_scene or "nature" in top_scene
+                clip_ran = True
+
+        if not clip_ran and visual_features is not None:
+            scene_info = visual_features.get("scene", {})
+            is_outdoor = scene_info.get("is_outdoor", False) if isinstance(scene_info, dict) else False
+            scene_type = scene_info.get("type", "scene background") if isinstance(scene_info, dict) else str(scene_info)
+
+        outdoor_indicators = ["outdoor", "park", "nature", "field", "yard", "snow", "road", "street", "beach", "sky", "forest", "mountain", "cliff", "ocean", "landscape"]
+        indoor_indicators = ["indoor", "room", "kitchen", "office", "desk", "bedroom", "living room", "concert hall", "coffee bar", "library", "gallery"]
 
         if any(w in claim_text for w in outdoor_indicators):
             if is_outdoor:
@@ -83,14 +111,14 @@ class SceneVerifier:
                 uncertainty_s = 0.15
                 rationale = f"Contradiction: Visual context indicates outdoor environment, conflicting with '{claim.text}'."
         else:
-            support_s = 0.60
-            contradict_s = 0.20
-            uncertainty_s = 0.40
+            support_s = 0.65
+            contradict_s = 0.15
+            uncertainty_s = 0.20
             rationale = f"General visual alignment with scene context ({scene_type})."
 
         cot = (
             f"Step 1: Analyzed scene claim '{claim.text}'. "
-            f"Step 2: Environment classified as '{scene_type}' (is_outdoor={is_outdoor}). "
+            f"Step 2: Environment classified as '{scene_type}' (is_outdoor={is_outdoor}, clip_inference={clip_ran}). "
             f"Step 3: {rationale} "
             f"Step 4: Directional evidence -> Support={support_s:.2f}, Contradict={contradict_s:.2f}, Uncertainty={uncertainty_s:.2f}."
         )
@@ -134,7 +162,6 @@ class SceneVerifier:
 
         # Arbitrary location claims without landmark: "in Paris", "in Tokyo", "in New York", "in London"
         if re.search(r'\b(?:in|at)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\b', claim.text):
-            # Check if text claims specific city or location name
             location_match = re.search(r'\b(?:taken in|located in|photographed in|shot in|in)\s+([A-Z][a-z]+)', claim.text)
             if location_match and location_match.group(1) not in ["The", "A", "An", "This", "Outdoor", "Indoor"]:
                 return True, f"Geographic location claim ('{location_match.group(1)}') requires external metadata without distinctive landmark grounding."

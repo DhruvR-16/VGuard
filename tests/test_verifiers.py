@@ -77,5 +77,5 @@ def test_absence_directional_evidence():
     )
     features = {"objects": {"dog": 0.92}}
     evidence = verifier.verify(claim, visual_features=features)
-    assert evidence.support_score >= 0.75
-    assert evidence.uncertainty_score <= 0.25
+    assert evidence.support_score >= 0.70
+    assert evidence.uncertainty_score <= 0.30

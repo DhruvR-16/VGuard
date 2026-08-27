@@ -9,6 +9,7 @@ from visionguard.verifiers.action_verifier import ActionInteractionVerifier, Rel
 from visionguard.verifiers.ocr_verifier import OCRVerifier
 from visionguard.verifiers.scene_verifier import SceneVerifier
 from visionguard.verifiers.absence_verifier import AbsenceVerifier
+from visionguard.verifiers.count_verifier import CountVerifier
 
 __all__ = [
     "OpenVocabularyGroundingVerifier",
@@ -19,5 +20,6 @@ __all__ = [
     "RelationVerifier",
     "OCRVerifier",
     "SceneVerifier",
-    "AbsenceVerifier"
+    "AbsenceVerifier",
+    "CountVerifier"
 ]

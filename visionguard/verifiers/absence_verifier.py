@@ -53,16 +53,17 @@ class AbsenceVerifier:
             res_str = f"Contradiction: '{concept}' clearly detected in visual scene (conf={presence_score:.1%}), refuting absence assertion."
         elif presence_score >= 0.20:
             # Faint / partial trace detected -> High uncertainty
-            support_s = 0.30
+            support_s = 0.25
             contradict_s = round(presence_score, 3)
             uncertainty_s = 0.65
             res_str = f"Inconclusive absence: Weak/partial detection traces for '{concept}' (conf={presence_score:.1%}, uncertainty=0.65)."
         else:
-            # Completely absent under multi-pass search -> High support for absence claim
-            support_s = round(max(0.80, 1.0 - presence_score), 3)
-            contradict_s = 0.05
-            uncertainty_s = 0.15
-            res_str = f"Absence verified: Multi-pass open grounding found no localized traces of '{concept}'."
+            # Not detected in open-vocab search: Calibrated absence support with residual uncertainty
+            # Prevents overconfident claim of absence on small or occluded entities
+            support_s = 0.70
+            contradict_s = 0.10
+            uncertainty_s = 0.30
+            res_str = f"Absence supported: Open-vocabulary detector found no localized instances of '{concept}' (support=0.70, uncertainty=0.30)."
 
         cot = (
             f"Step 1: Conducted multi-pass presence check for '{concept}'. "

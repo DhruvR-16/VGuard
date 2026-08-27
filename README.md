@@ -5,7 +5,7 @@
 [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115%2B-009688.svg)](https://fastapi.tiangolo.com/)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.0%2B-EE4C2C.svg)](https://pytorch.org/)
-[![Tests](https://img.shields.io/badge/tests-22%2F22%20passing-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-24%2F24%20passing-brightgreen.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)]()
 
 ---
@@ -19,19 +19,20 @@
 6. [Core Architectural Blueprint (CAM-V)](#6-core-architectural-blueprint-cam-v)
 7. [Claim Decomposition & Dependency Graph](#7-claim-decomposition--dependency-graph)
 8. [12-Class Claim Taxonomy](#8-12-class-claim-taxonomy)
-9. [Open-Vocabulary Evidence Verification & Verifier Router](#9-open-vocabulary-evidence-verification--verifier-router)
+9. [Open-Vocabulary Evidence Verification & Verifier Router (8 Specialized Verifiers)](#9-open-vocabulary-evidence-verification--verifier-router)
 10. [Evidence Fusion & 4-State Uncertainty Modeling](#10-evidence-fusion--4-state-uncertainty-modeling)
 11. [Evidence Provenance](#11-evidence-provenance)
 12. [Constrained Response Repair & Re-Verification](#12-constrained-response-repair--re-verification)
-13. [Adversarial Hallucination Generation](#13-adversarial-hallucination-generation)
-14. [Evaluation Methodology & 6 Core Experiments](#14-evaluation-methodology--6-core-experiments)
-15. [HQM Psychometric Reliability & Validity](#15-hqm-psychometric-reliability--validity)
-16. [Repository Structure](#16-repository-structure)
-17. [RESTful API Specification](#17-restful-api-specification)
-18. [CLI Reference](#18-cli-reference)
-19. [What Was Removed, Replaced, and Added](#19-what-was-removed-replaced-and-added)
-20. [Final Research Contribution](#20-final-research-contribution)
-21. [References & Citation](#21-references--citation)
+13. [Independent Benchmark Dataset (Images & Atomic Claims)](#13-independent-benchmark-dataset)
+14. [Adversarial Hallucination Generation](#14-adversarial-hallucination-generation)
+15. [Evaluation Methodology & 6 Core Experiments](#15-evaluation-methodology--6-core-experiments)
+16. [HQM Psychometric Reliability & Validity](#16-hqm-psychometric-reliability--validity)
+17. [Repository Structure](#17-repository-structure)
+18. [RESTful API Specification](#18-restful-api-specification)
+19. [CLI Reference](#19-cli-reference)
+20. [What Was Removed, Replaced, and Added](#20-what-was-removed-replaced-and-added)
+21. [Final Research Contribution](#21-final-research-contribution)
+22. [References & Citation](#22-references--citation)
 
 ---
 
@@ -471,29 +472,38 @@ The FastAPI server provides 10 endpoints:
 
 ---
 
-## 18. CLI Reference
+## 19. CLI Reference
 
 ```bash
 # 1. Start FastAPI server & Web Dashboard on port 8000
 python3 run.py server --port 8000
 
-# 2. Analyze a text response
-python3 run.py analyze "A young boy wearing a red shirt is riding a bicycle near a park."
+# 2. Analyze a text response (with image or feature context)
+python3 run.py analyze "A young boy wearing a red shirt is riding a bicycle near a park." --image data/images/000001.jpg
 
 # 3. Perform constrained response repair
-python3 run.py repair "A brown dog is sitting beside a red bicycle in Paris. The dog is an astronaut."
+python3 run.py repair "A brown dog is sitting beside a red bicycle. The dog is an astronaut." --image data/images/000002.jpg
 
 # 4. Generate adversarial hallucination test cases
 python3 run.py adversarial "A man is riding a bicycle near the river."
 
-# 5. Run comparative benchmark evaluation across baselines
-python3 run.py eval
+# 5. Run comparative benchmark evaluation across independent baselines
+python3 run.py eval --experiment benchmark
 
 # 6. Run Section 14 ablation experiments (A0 to A5)
-python3 run.py ablation
+python3 run.py eval --experiment ablation
 
-# 7. Run all 6 evaluation experiments
-python3 run.py experiments
+# 7. Run real Order Invariance & Negation Sensitivity robustness experiments
+python3 run.py eval --experiment robustness
+
+# 8. Run multi-annotator Human Alignment & Cohen's Kappa evaluation
+python3 run.py eval --experiment human_alignment
+
+# 9. Run Response Repair Guardrail with real latency measurement
+python3 run.py eval --experiment guardrail
+
+# 10. Run complete 5-experiment suite
+python3 run.py eval --experiment all
 ```
 
 ---

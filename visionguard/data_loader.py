@@ -1,56 +1,89 @@
 """
 Data Loader for VisionGuard Benchmark Datasets.
-Loads annotated vision-language claim evaluation datasets from data/visionguard_claims_v0.1.jsonl.
+Loads annotated vision-language claim evaluation datasets, raw image paths,
+and multi-annotator ground truth from data/annotations/claims.jsonl and data/visionguard_claims_v0.1.jsonl.
 """
 
 import os
 import json
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
-DATA_FILE = os.path.join(os.path.dirname(__file__), "..", "data", "visionguard_claims_v0.1.jsonl")
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DATA_FILE = os.path.join(BASE_DIR, "data", "visionguard_claims_v0.1.jsonl")
+CLAIMS_FILE = os.path.join(BASE_DIR, "data", "annotations", "claims.jsonl")
+SPLITS_FILE = os.path.join(BASE_DIR, "data", "annotations", "splits.json")
 
 
 def get_sample_dataset() -> List[Dict[str, Any]]:
     """
-    Loads the VisionGuard-Claims v0.1 benchmark dataset.
+    Loads the image-backed VisionGuard-Claims benchmark dataset.
     """
     if os.path.exists(DATA_FILE):
         dataset = []
         with open(DATA_FILE, "r", encoding="utf-8") as f:
             for line in f:
                 if line.strip():
-                    dataset.append(json.loads(line.strip()))
+                    item = json.loads(line.strip())
+                    if "image_path" in item:
+                        # Ensure absolute path or relative to project root
+                        full_img_path = os.path.join(BASE_DIR, item["image_path"])
+                        if os.path.exists(full_img_path):
+                            item["full_image_path"] = full_img_path
+                    dataset.append(item)
         return dataset
 
-    # Fallback to in-memory starter records if file is missing
-    return [
-        {
-            "id": "sample_001",
-            "image_id": "vg_1001",
-            "response_text": "A young boy wearing a red shirt is riding a bicycle near a park.",
-            "ground_truth_verdict": "Supported",
-            "subject": "boy",
-            "visual_features": {
-                "objects": {"boy": 0.95, "bicycle": 0.92, "shirt": 0.94},
-                "object_details": {
-                    "boy": {"confidence": 0.95, "bbox": [0.2, 0.1, 0.6, 0.8]},
-                    "bicycle": {"confidence": 0.92, "bbox": [0.25, 0.4, 0.65, 0.9]}
-                },
-                "color_distribution": {"red": 0.35, "green": 0.40},
-                "scene": {"type": "outdoor park", "is_outdoor": True}
-            }
-        }
-    ]
+    return []
+
+
+def get_atomic_claims_dataset(split: Optional[str] = None) -> List[Dict[str, Any]]:
+    """
+    Loads independent atomic claim annotations with multi-annotator ground truth.
+    Optionally filters by split ('train', 'val', 'test').
+    """
+    if not os.path.exists(CLAIMS_FILE):
+        return []
+
+    split_ids = None
+    if split and os.path.exists(SPLITS_FILE):
+        with open(SPLITS_FILE, "r", encoding="utf-8") as f:
+            splits_data = json.load(f)
+            split_ids = set(splits_data.get(split, []))
+
+    claims = []
+    with open(CLAIMS_FILE, "r", encoding="utf-8") as f:
+        for line in f:
+            if line.strip():
+                item = json.loads(line.strip())
+                if split_ids is not None and item.get("claim_id") not in split_ids:
+                    continue
+                if "image_path" in item:
+                    full_img_path = os.path.join(BASE_DIR, item["image_path"])
+                    if os.path.exists(full_img_path):
+                        item["full_image_path"] = full_img_path
+                claims.append(item)
+
+    return claims
+
+
+def get_dataset_splits() -> Dict[str, List[str]]:
+    """
+    Returns train / val / test claim IDs.
+    """
+    if os.path.exists(SPLITS_FILE):
+        with open(SPLITS_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return {"train": [], "val": [], "test": []}
 
 
 def get_leaderboard_data() -> List[Dict[str, Any]]:
     """
-    Returns reference evaluation leaderboard data across 8 perceptual dimensions.
+    Returns reference evaluation leaderboard data across 8 perceptual dimensions from literature.
     """
     return [
         {
             "rank": 1,
             "model": "GPT-4o",
+            "source": "Literature Reference",
             "main_hal_rate": 0.125,
             "extra_hal_count": 0.240,
             "overall_hal_rate": 0.285,
@@ -59,6 +92,7 @@ def get_leaderboard_data() -> List[Dict[str, Any]]:
         {
             "rank": 2,
             "model": "Claude 3.5 Sonnet",
+            "source": "Literature Reference",
             "main_hal_rate": 0.140,
             "extra_hal_count": 0.265,
             "overall_hal_rate": 0.310,
@@ -67,6 +101,7 @@ def get_leaderboard_data() -> List[Dict[str, Any]]:
         {
             "rank": 3,
             "model": "Gemini 1.5 Pro",
+            "source": "Literature Reference",
             "main_hal_rate": 0.165,
             "extra_hal_count": 0.310,
             "overall_hal_rate": 0.360,
@@ -75,6 +110,7 @@ def get_leaderboard_data() -> List[Dict[str, Any]]:
         {
             "rank": 4,
             "model": "LLaVA-NeXT-34B",
+            "source": "Literature Reference",
             "main_hal_rate": 0.220,
             "extra_hal_count": 0.450,
             "overall_hal_rate": 0.485,
@@ -88,8 +124,8 @@ def get_hqm_benchmark_quality_table() -> List[Dict[str, Any]]:
     Returns reference HQM Psychometric Reliability & Validity metrics from literature.
     """
     return [
-        {"name": "HQH Benchmark (Yan et al., 2024)", "task": "VQA / Hallucination", "metric": "F1 / Accuracy", "test_retest": 0.985, "parallel_forms": 0.942, "content_validity": 0.980, "criterion_validity": 0.955},
-        {"name": "POPE (Li et al., 2023)", "task": "Object Existence", "metric": "Accuracy / F1", "test_retest": 0.920, "parallel_forms": 0.840, "content_validity": 0.880, "criterion_validity": 0.810},
-        {"name": "MME (Fu et al., 2023)", "task": "Perception / Cognition", "metric": "Score Sum", "test_retest": 0.890, "parallel_forms": 0.780, "content_validity": 0.820, "criterion_validity": 0.740},
-        {"name": "MMHal-Bench (Sun et al., 2023)", "task": "Response Hallucination", "metric": "GPT-4 Score", "test_retest": 0.810, "parallel_forms": 0.710, "content_validity": 0.750, "criterion_validity": 0.690}
+        {"name": "HQH Benchmark (Yan et al., 2024)", "source": "Literature Reference", "task": "VQA / Hallucination", "metric": "F1 / Accuracy", "test_retest": 0.985, "parallel_forms": 0.942, "content_validity": 0.980, "criterion_validity": 0.955},
+        {"name": "POPE (Li et al., 2023)", "source": "Literature Reference", "task": "Object Existence", "metric": "Accuracy / F1", "test_retest": 0.920, "parallel_forms": 0.840, "content_validity": 0.880, "criterion_validity": 0.810},
+        {"name": "MME (Fu et al., 2023)", "source": "Literature Reference", "task": "Perception / Cognition", "metric": "Score Sum", "test_retest": 0.890, "parallel_forms": 0.780, "content_validity": 0.820, "criterion_validity": 0.740},
+        {"name": "MMHal-Bench (Sun et al., 2023)", "source": "Literature Reference", "task": "Response Hallucination", "metric": "GPT-4 Score", "test_retest": 0.810, "parallel_forms": 0.710, "content_validity": 0.750, "criterion_validity": 0.690}
     ]

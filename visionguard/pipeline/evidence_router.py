@@ -12,6 +12,7 @@ from visionguard.verifiers.action_verifier import ActionInteractionVerifier
 from visionguard.verifiers.ocr_verifier import OCRVerifier
 from visionguard.verifiers.scene_verifier import SceneVerifier
 from visionguard.verifiers.absence_verifier import AbsenceVerifier
+from visionguard.verifiers.count_verifier import CountVerifier
 
 
 class EvidenceRouter:
@@ -27,6 +28,7 @@ class EvidenceRouter:
         self.ocr_verifier = OCRVerifier(use_mock=use_mock)
         self.scene_verifier = SceneVerifier(use_mock=use_mock)
         self.absence_verifier = AbsenceVerifier(use_mock=use_mock)
+        self.count_verifier = CountVerifier(use_mock=use_mock)
 
     def route_and_verify(
         self,
@@ -46,8 +48,8 @@ class EvidenceRouter:
             evidences.append(self.object_verifier.verify(claim, image_path, visual_features))
 
         elif claim.type == ClaimType.OBJECT_COUNT:
+            evidences.append(self.count_verifier.verify(claim, image_path, visual_features))
             evidences.append(self.object_verifier.verify(claim, image_path, visual_features))
-            evidences.append(self.spatial_verifier.verify(claim, image_path, visual_features))
 
         elif claim.type in [ClaimType.COLOR, ClaimType.ATTRIBUTE]:
             evidences.append(self.attribute_verifier.verify(claim, image_path, visual_features))

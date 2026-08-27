@@ -6,6 +6,7 @@ using CLIP zero-shot classification and regional color distribution.
 
 from typing import Dict, Any, Optional, List
 from PIL import Image
+import numpy as np
 from visionguard.schemas import AtomicClaim, Evidence, Polarity
 from visionguard.models.registry import registry
 
@@ -72,40 +73,60 @@ class AttributeVerifier:
             clip_support = float(probs.get(target_cand, 0.0))
             clip_contradict = float(sum(v for k, v in probs.items() if k != target_cand))
 
-        # 2. Fallback to pixel color distribution or visual_features if CLIP is not active
+        # 2. Regional analysis on object crop or visual_features fallback
         if clip_support == 0.0 and visual_features is not None:
-            color_dist = visual_features.get("color_distribution", {})
             attr_dict = visual_features.get("attributes", {})
 
-            # Check exact attribute entry
-            if target_color and target_color in color_dist:
-                col_frac = float(color_dist[target_color])
-                clip_support = min(1.0, col_frac * 2.5) if col_frac > 0.05 else 0.15
-                clip_contradict = 1.0 - clip_support
+            # If image_obj and bbox are present, compute real color specifically on the object crop
+            if image_obj is not None and bbox is not None and target_color:
+                cropped = self._crop_bbox(image_obj, bbox)
+                crop_np = np.array(cropped.convert("RGB"))
+                regional_colors = self._analyze_region_color(crop_np)
+                col_frac = float(regional_colors.get(target_color, 0.0))
+                if col_frac > 0.08:
+                    clip_support = min(0.92, 0.50 + col_frac * 2.0)
+                    clip_contradict = 0.08
+                else:
+                    clip_support = 0.10
+                    clip_contradict = 0.85
             elif any(k in claim_text for k in attr_dict):
                 matched_attr = next(k for k in attr_dict if k in claim_text)
                 clip_support = float(attr_dict[matched_attr])
                 clip_contradict = 1.0 - clip_support
+            elif bbox is not None and target_color and "color_distribution" in visual_features:
+                # Bounding box is localized and color distribution provided
+                col_frac = float(visual_features["color_distribution"].get(target_color, 0.0))
+                clip_support = min(0.85, col_frac * 2.0) if col_frac > 0.08 else 0.20
+                clip_contradict = 1.0 - clip_support
             else:
-                clip_support = 0.50
-                clip_contradict = 0.30
+                # No localized object bounding box exists: Safe Insufficient Evidence
+                # Prevents global image background color from falsely verifying object-specific attributes
+                clip_support = 0.35
+                clip_contradict = 0.20
 
         # Calculate directional scores
         if clip_support >= 0.40:
             support_s = round(min(0.95, clip_support * 1.5), 3)
             contradict_s = round(max(0.05, clip_contradict * 0.4), 3)
-            uncertainty_s = 0.10
+            uncertainty_s = round(max(0.05, 1.0 - support_s - contradict_s), 3)
             res_str = f"Attribute alignment verified: '{claim.text}' supported on object region."
         elif clip_support >= 0.15:
             support_s = round(clip_support, 3)
-            contradict_s = round(clip_contradict * 0.5, 3)
-            uncertainty_s = 0.50
+            contradict_s = round(min(0.35, clip_contradict * 0.5), 3)
+            uncertainty_s = round(1.0 - support_s - contradict_s, 3)
             res_str = f"Ambiguous attribute evidence on region for '{claim.text}'."
-        else:
+        elif bbox is not None and clip_contradict >= 0.70:
+            # Localized object has strong positive evidence of conflicting attribute (e.g. green instead of red)
             support_s = round(clip_support, 3)
             contradict_s = 0.80
             uncertainty_s = 0.15
-            res_str = f"Contradiction: Attribute in '{claim.text}' not supported by regional visual features."
+            res_str = f"Contradiction: Conflicting attribute detected on localized object for '{claim.text}'."
+        else:
+            # Absence of visual evidence / unlocalized object: Insufficient Evidence, NOT contradiction
+            support_s = 0.10
+            contradict_s = 0.20
+            uncertainty_s = 0.70
+            res_str = f"Insufficient visual evidence to verify attribute in '{claim.text}' (uncertainty=0.70)."
 
         cot = (
             f"Step 1: Grounded object '{target_entity}' at bbox {bbox or 'full_frame'}. "
@@ -160,3 +181,18 @@ class AttributeVerifier:
             if c in text:
                 return c
         return None
+
+    def _analyze_region_color(self, img_np: np.ndarray) -> Dict[str, float]:
+        if img_np.size == 0:
+            return {}
+        r, g, b = img_np[:, :, 0], img_np[:, :, 1], img_np[:, :, 2]
+        total = float(r.size)
+        return {
+            "red": round(float(np.sum((r > 130) & (g < 100) & (b < 100))) / total, 4),
+            "blue": round(float(np.sum((b > 130) & (r < 100) & (g < 120))) / total, 4),
+            "green": round(float(np.sum((g > 120) & (r < 110) & (b < 110))) / total, 4),
+            "yellow": round(float(np.sum((r > 140) & (g > 140) & (b < 90))) / total, 4),
+            "white": round(float(np.sum((r > 200) & (g > 200) & (b > 200))) / total, 4),
+            "black": round(float(np.sum((r < 50) & (g < 50) & (b < 50))) / total, 4),
+            "brown": round(float(np.sum((r > 90) & (r < 160) & (g > 50) & (g < 110) & (b < 80))) / total, 4)
+        }
