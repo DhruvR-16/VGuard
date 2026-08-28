@@ -1,551 +1,615 @@
-# VisionGuard
+# 🛡️ VGuard
 
-> **Claim-Aware Multi-Evidence Hallucination Detection, Response Repair & Psychometric Quality Evaluation for Vision-Language Models**
+> **Claim-Aware Multi-Evidence Hallucination Detection, Response Repair & Psychometric Quality Evaluation for Large Vision-Language Models (LVLMs)**
 
-[![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.115%2B-009688.svg)](https://fastapi.tiangolo.com/)
-[![PyTorch](https://img.shields.io/badge/PyTorch-2.0%2B-EE4C2C.svg)](https://pytorch.org/)
-[![Tests](https://img.shields.io/badge/tests-24%2F24%20passing-brightgreen.svg)]()
-[![License](https://img.shields.io/badge/license-MIT-green.svg)]()
+[![Status: Active Development](https://img.shields.io/badge/Status-Active%20Development-orange?style=flat-square&logo=git)](https://github.com/DhruvR-16/VGuard)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](LICENSE)
 
----
-
-## Table of Contents
-1. [Project Overview](#1-project-overview)
-2. [The Problem](#2-the-problem)
-3. [Why Existing Approaches Are Insufficient](#3-why-existing-approaches-are-insufficient)
-4. [Project Goal](#4-project-goal)
-5. [What VisionGuard Does](#5-what-visionguard-does)
-6. [Core Architectural Blueprint (CAM-V)](#6-core-architectural-blueprint-cam-v)
-7. [Claim Decomposition & Dependency Graph](#7-claim-decomposition--dependency-graph)
-8. [12-Class Claim Taxonomy](#8-12-class-claim-taxonomy)
-9. [Open-Vocabulary Evidence Verification & Verifier Router (8 Specialized Verifiers)](#9-open-vocabulary-evidence-verification--verifier-router)
-10. [Evidence Fusion & 4-State Uncertainty Modeling](#10-evidence-fusion--4-state-uncertainty-modeling)
-11. [Evidence Provenance](#11-evidence-provenance)
-12. [Constrained Response Repair & Re-Verification](#12-constrained-response-repair--re-verification)
-13. [Independent Benchmark Dataset (Images & Atomic Claims)](#13-independent-benchmark-dataset)
-14. [Adversarial Hallucination Generation](#14-adversarial-hallucination-generation)
-15. [Evaluation Methodology & 6 Core Experiments](#15-evaluation-methodology--6-core-experiments)
-16. [HQM Psychometric Reliability & Validity](#16-hqm-psychometric-reliability--validity)
-17. [Repository Structure](#17-repository-structure)
-18. [RESTful API Specification](#18-restful-api-specification)
-19. [CLI Reference](#19-cli-reference)
-20. [What Was Removed, Replaced, and Added](#20-what-was-removed-replaced-and-added)
-21. [Final Research Contribution](#21-final-research-contribution)
-22. [References & Citation](#22-references--citation)
+> [!NOTE]
+> **Active Research & Development**: VGuard is under active development with continuous updates, architectural refinements, and feature additions. APIs, verifier modules, and evaluation benchmarks are being actively iterated upon.
 
 ---
 
-## 1. Project Overview
+## 📌 Executive Summary
 
-Large Vision-Language Models (LVLMs) can generate fluent descriptions, answers, and reasoning about images. However, they frequently generate statements that are **plausible, linguistically convincing, but visually incorrect**—a phenomenon known as *visual hallucination*.
+**VGuard** (Claim-Aware Multi-Evidence Verification / CAM-V) is an open-source, open-vocabulary framework designed to detect, explain, and mitigate visual hallucinations in Large Vision-Language Models (LVLMs).
 
-For example, given an image of a person riding a bicycle, a VLM may generate:
-> *"A young man wearing a red jacket is riding a bicycle near the Eiffel Tower."*
+Unlike conventional evaluation approaches that treat generated multimodal text as monolithic blocks, VGuard decomposes responses into an **atomic Claim Dependency Graph (DAG)**. Each claim is classified according to a **12-Class Fine-Grained Taxonomy** and routed to **specialized visual domain verifiers** (Open-Vocabulary Grounding, Spatial Calculus, Attribute/Color Matchers, Relational Action Judges, OCR, Absence Filters, and Scene Context). Evidence is aggregated via **4-State Formal Uncertainty Modeling**, producing auditable evidence provenance and enabling **closed-loop constrained response repair with re-verification**.
 
-This response contains multiple independent factual assertions:
-- $C_1$: A person exists.
-- $C_2$: The person is young.
-- $C_3$: The person is male.
-- $C_4$: The person is wearing a jacket.
-- $C_5$: The jacket is red.
-- $C_6$: The person is riding a bicycle.
-- $C_7$: The scene is near the Eiffel Tower (geographic/external).
-
-Some may be factually correct, while others are completely unsupported. The fundamental problem is that existing evaluation approaches judge the entire response as a single monolithic unit.
-
-**VisionGuard asks:** *Can we decompose a Vision-Language Model response into individual factual claims and verify each claim using the most appropriate source of visual evidence?*
-
----
-
-## 2. The Problem
-
-Consider the response:
-> *"A woman wearing a yellow jacket is riding a bicycle through a busy city street while a red car follows behind her."*
-
-A traditional hallucination evaluator sends the entire response to another model and asks: *"Is this response consistent with the image?"*
-
-This fails because the evaluator must simultaneously reason about:
-- Object existence
-- Colors and attributes
-- Physical actions and interactions
-- Spatial positions and geometry
-- Object counts
-- Global scene and environmental context
-
-A single monolithic model may be effective at one type of verification and poor at another. VisionGuard therefore decomposes the response into atomic propositions ($C_1 \dots C_8$), builds a dependency graph, and verifies each proposition independently using specialized visual evidence sources.
-
----
-
-## 3. Why Existing Approaches Are Insufficient
-
-The research paper used as an evaluation foundation (*Yan et al., arXiv:2406.17115v3, "Measuring the Measurers"*) identifies key structural flaws in existing hallucination benchmarks:
-- **Response bias** in closed-ended questions.
-- **Score instability** caused by prompt variation.
-- **Annotation noise** in benchmark testbeds.
-- **Disagreement** between automated monolithic evaluators and human experts.
-- **Conflation** of direct question errors with incidental elaborative hallucinations.
-
-The paper proposes **HQM** (Hallucination Quality Measurement) for assessing benchmark quality and **HQH** as an 8-dimension benchmark. 
-
-### Relationship to the Paper:
 ```
-┌────────────────────────────────────────┐
-│             HQM / HQH                  │
-│       (Yan et al., 2024)               │
-│  • Provides evaluation methodology     │
-│  • Motivates psychometric reliability  │
-│  • Separates 8 perceptual dimensions   │
-└───────────────────┬────────────────────┘
-                    │
-                    ▼
-┌────────────────────────────────────────┐
-│              VisionGuard               │
-│  • Proposes claim-aware verification   │
-│  • Open-vocabulary visual grounding    │
-│  • Modular specialized verifier router │
-│  • Constrained response repair         │
-└───────────────────┬────────────────────┘
-                    │
-                    ▼
-┌────────────────────────────────────────┐
-│           CAM-V Framework              │
-│  • Active runtime verification engine  │
-│  • Claim Dependency Graph (DAG)        │
-│  • 4-state formal uncertainty fusion   │
-└────────────────────────────────────────┘
+   ┌───────────────────────┐      ┌─────────────────────────┐      ┌─────────────────────────┐
+   │    VLM Response &     │ ───▶ │ Claim Decomposition DAG │ ───▶ │ 12-Class Claim Router   │
+   │      Input Image      │      │  (Atomic Propositions)  │      │  (Specialized Routing)  │
+   └───────────────────────┘      └─────────────────────────┘      └────────────┬────────────┘
+                                                                                │
+   ┌───────────────────────┐      ┌─────────────────────────┐                   ▼
+   │  Repaired Grounded    │ ◀─── │ Constrained Synthesis & │ ◀─── ┌─────────────────────────┐
+   │  Output (Re-Verified) │      │ 4-State Uncertainty     │      │ Multi-Evidence Verifier │
+   │                       │      │ (SUPPORTED/CONTRADICTED)│      │ Ensemble (7 Verifiers)  │
+   └───────────────────────┘      └─────────────────────────┘      └─────────────────────────┘
 ```
 
 ---
 
-## 4. Project Goal
+## 📑 Table of Contents
 
-VisionGuard provides an end-to-end framework that:
-1. Receives an image and a VLM-generated response.
-2. Decomposes the response into atomic factual claims with explicit polarity.
-3. Classifies each claim into a 12-class taxonomy.
-4. Routes the claim to specialized domain verifiers.
-5. Gathers open-vocabulary visual evidence and bounding box coordinates.
-6. Fuses evidence using claim-aware learned models.
-7. Classifies the claim into 4 formally defined uncertainty states.
-8. Provides complete, explainable evidence provenance.
-9. Performs constrained response repair to remove contradicted assertions.
-10. Re-verifies the repaired response to guarantee factual grounding.
-
----
-
-## 5. What VisionGuard Does
-
-```
-                           IMAGE + VLM RESPONSE
-                                     │
-                                     ▼
-                    ┌─────────────────────────────────┐
-                    │    Structured Claim Extractor   │
-                    │ • Atomic Claims + Polarity      │
-                    │ • Claim Dependency Graph (DAG)  │
-                    └────────────────┬────────────────┘
-                                     │
-                                     ▼
-                    ┌─────────────────────────────────┐
-                    │       12-Class Claim Router     │
-                    └────────────────┬────────────────┘
-                                     │
-        ┌─────────────┬──────────────┼──────────────┬─────────────┐
-        ▼             ▼              ▼              ▼             ▼
-   [Object]      [Attribute]      [Spatial]    [Action/VQA]     [OCR]
-   Open-Vocab    Region/CLIP      Geometric    Relational       Text Engine
-   Grounding     Matching         Calculus     Reasoning        Extraction
-        │             │              │              │             │
-        └─────────────┴──────────────┼──────────────┴─────────────┘
-                                     ▼
-                    ┌─────────────────────────────────┐
-                    │       Evidence Provenance       │
-                    │  Source, Score, BBox, CoT Log   │
-                    └────────────────┬────────────────┘
-                                     │
-                                     ▼
-                    ┌─────────────────────────────────┐
-                    │   Claim-Aware Evidence Fusion   │
-                    └────────────────┬────────────────┘
-                                     │
-                                     ▼
-                    ┌─────────────────────────────────┐
-                    │    4-State Uncertainty Engine   │
-                    │ SUPPORTED / CONTRADICTED /      │
-                    │ INSUFFICIENT_EVIDENCE /         │
-                    │ OUT_OF_SCOPE                    │
-                    └────────────────┬────────────────┘
-                                     │
-                                     ▼
-                    ┌─────────────────────────────────┐
-                    │   Constrained Response Repair   │
-                    │  • Strip contradicted claims    │
-                    │  • Constrained fact synthesis   │
-                    │  • Re-Verification Loop         │
-                    └─────────────────────────────────┘
-```
+1. [Key Capabilities](#-key-capabilities)
+2. [The Multimodal Hallucination Problem](#-the-multimodal-hallucination-problem)
+3. [System Architecture & CAM-V Blueprint](#-system-architecture--cam-v-blueprint)
+4. [12-Class Claim Taxonomy](#-12-class-claim-taxonomy)
+5. [Specialized Verifier Ensemble & Routing Matrix](#-specialized-verifier-ensemble--routing-matrix)
+6. [Claim Dependency Graph (DAG) & Cascading Falsification](#-claim-dependency-graph-dag--cascading-falsification)
+7. [Evidence Fusion & 4-State Uncertainty Engine](#-evidence-fusion--4-state-uncertainty-engine)
+8. [Auditable Evidence Provenance](#-auditable-evidence-provenance)
+9. [Constrained Response Repair & Re-Verification Loop](#-constrained-response-repair--re-verification-loop)
+10. [Adversarial Hallucination Generator (7 Operators)](#-adversarial-hallucination-generator-7-operators)
+11. [Scientific Evaluation Suite (6 Core Experiments)](#-scientific-evaluation-suite-6-core-experiments)
+12. [HQM Psychometric Reliability & Validity](#-hqm-psychometric-reliability--validity)
+13. [Installation & Setup](#-installation--setup)
+14. [Quick Start & Usage](#-quick-start--usage)
+15. [CLI Reference](#-cli-reference)
+16. [Python SDK & Programmatic API](#-python-sdk--programmatic-api)
+17. [RESTful API Specification](#-restful-api-specification)
+18. [Interactive Web Dashboard](#-interactive-web-dashboard)
+19. [Repository Structure](#-repository-structure)
+20. [References](#-references)
+21. [License](#-license)
 
 ---
 
-## 6. Core Architectural Blueprint (CAM-V)
+## 🌟 Key Capabilities
 
-Instead of a monolithic evaluator or a fixed 1,000-class ImageNet classifier, CAM-V operates on **open-vocabulary visual grounding**:
-
-```
-OLD SYSTEM (Fixed Classifier):
-Image ──▶ Fixed Classifier ──▶ Fixed 1K ImageNet Categories (Fails on arbitrary concepts)
-
-NEW CAM-V SYSTEM (Open-Vocabulary):
-Image + Claim Query ──▶ Open-Vocabulary Grounding ──▶ Fine-Grained Visual Evidence BBox
-```
-
-This allows VisionGuard to verify arbitrary open-vocabulary concepts (e.g., *"vintage espresso tamper"*, *"purple backpack"*, *"construction worker"*).
+- 🔍 **Open-Vocabulary Visual Grounding**: Unbounded semantic concept verification via YOLO-World v2 and zero-shot visual backends without ImageNet/fixed-class restrictions.
+- 🌳 **Hierarchical Claim Dependency Graph (DAG)**: Models prerequisite entity-attribute-action dependencies; cascading falsification prevents false grounding attachments when root entities are absent.
+- 🎯 **12-Class Fine-Grained Claim Taxonomy**: Explicitly isolates object existence, counts, colors, physical attributes, dynamic actions, inter-entity interactions, spatial relations, comparative scales, OCR text, scene context, negative assertions, and out-of-scope knowledge.
+- ⚖️ **Directional Evidence & 4-State Uncertainty Engine**: Measures independent support, contradiction, and uncertainty dimensions to produce calibrated verdicts: `SUPPORTED`, `CONTRADICTED`, `INSUFFICIENT_EVIDENCE`, and `OUT_OF_SCOPE`.
+- 🛠️ **Closed-Loop Constrained Response Repair**: Automatically isolates and prunes contradicted assertions, reconstructs grammatically coherent grounded text, and validates factual consistency via an immediate re-verification pass.
+- ⚡ **7-Operator Adversarial Hallucination Engine**: Systematically synthesizes controlled adversarial perturbations (Object Swap, Attribute Swap, Count Mismatch, Spatial Relation Inversion, Negation Swap, Entity Swap, OCR Distortion) for robustness stress testing.
+- 📊 **HQM Psychometric Evaluation & 6 Benchmark Suites**: Evaluated against test-retest reliability ($r > 0.95$), parallel-forms reliability ($\rho > 0.90$), content validity, criterion validity, baseline comparisons against 4 architectures, and Section 14 ablations (A0–A5).
+- 🚀 **Production-Ready Stack**: Includes a high-throughput FastAPI REST backend (10 endpoints), an executive dark-mode Web Dashboard UI, and a unified CLI.
 
 ---
 
-## 7. Claim Decomposition & Dependency Graph
+## ⚠️ The Multimodal Hallucination Problem
 
-### Structured Semantic Extraction
-Every extracted claim follows a structured schema:
-```json
-{
-  "claim_id": "C1",
-  "subject": "boy",
-  "predicate": "riding",
-  "target_object": "bicycle",
-  "claim_type": "action",
-  "polarity": "positive",
-  "certainty": "asserted",
-  "dependencies": ["C0"]
-}
+Large Vision-Language Models (LVLMs) frequently generate descriptions that are fluent and linguistically persuasive, yet factually inconsistent with visual inputs.
+
+Consider the following response generated for an image:
+> *"A young woman wearing a red jacket is riding a bicycle near the Eiffel Tower while two dogs play on the grass."*
+
+A traditional **monolithic evaluator** (e.g., GPT-4V-as-a-Judge or CLIPScore) evaluates this response as a single monolithic block:
+
+```
+Traditional Monolithic Approach:
+Image + Full Text ──▶ Monolithic Judge ──▶ "Score: 0.65" (Opaque, Uncalibrated, Unactionable)
 ```
 
-### Negation Support
-Sentences asserting non-existence (*"There are no cars on the road"*) preserve negative polarity:
-```json
-{
-  "subject": "cars",
-  "predicate": "exists",
-  "claim_type": "negative_claim",
-  "polarity": "negative"
-}
-```
-*It is not inverted into "A car exists".*
+### Why Monolithic Evaluation Fails:
+1. **Conflated Verification Modalities**: The model must simultaneously reason about object presence (woman, bicycle, dogs), attributes (young, red), dynamic actions (riding, playing), counts (two dogs), spatial relations (near, on), and world knowledge (Eiffel Tower).
+2. **Hallucination Blind Spots**: A monolithic judge may rate a sentence as "plausible" because $80\%$ of the statement is true, completely ignoring the hallucination of an out-of-scope landmark or incorrect count.
+3. **Lack of Explainability & Actionability**: Monolithic scores do not provide bounding box coordinates, visual evidence logs, or mechanisms to fix the hallucination.
 
-### Claim Dependency Graph (DAG)
-Claims are structured in a dependency DAG:
-```
-C1: Boy exists (Entity)
-├── C2: Wearing shirt (Attribute) ──▶ C3: Red shirt (Color)
-└── C4: Riding bicycle (Action)   ──▶ C5: Bicycle exists (Entity)
-```
-If parent entity $C_1$ is contradicted, failure cascades to dependent child attributes, preventing false grounding attachments.
+### The VGuard Solution:
+VGuard breaks down the complex response into atomic, verifiable propositions ($C_1 \dots C_8$), constructs a dependency graph, and verifies each proposition independently using specialized visual evidence tools.
 
 ---
 
-## 8. 12-Class Claim Taxonomy
+## 📐 System Architecture & CAM-V Blueprint
 
-| ID | Claim Type | Description | Example |
+VGuard operates through a coordinated 6-stage pipeline:
+
+```
+                                  IMAGE + VLM RESPONSE
+                                            │
+                                            ▼
+                           ┌─────────────────────────────────┐
+                           │   Structured Claim Extractor    │
+                           │ • Atomic Propositions + Polarity│
+                           │ • Claim Dependency Graph (DAG)  │
+                           └────────────────┬────────────────┘
+                                            │
+                                            ▼
+                           ┌─────────────────────────────────┐
+                           │      12-Class Claim Router      │
+                           └────────────────┬────────────────┘
+                                            │
+               ┌─────────────┬──────────────┼──────────────┬─────────────┐
+               ▼             ▼              ▼              ▼             ▼
+          [Grounding]   [Attribute]     [Spatial]     [Action/VQA]     [OCR]
+          YOLO-World    Region/CLIP     Geometric     Relational       Tesseract/
+          Open-Vocab    Matcher         Calculus      Judge            Vision OCR
+               │             │              │              │             │
+               └─────────────┴──────────────┼──────────────┴─────────────┘
+                                            ▼
+                           ┌─────────────────────────────────┐
+                           │       Evidence Provenance       │
+                           │  Source, Score, BBox, CoT Log   │
+                           └────────────────┬────────────────┘
+                                            │
+                                            ▼
+                           ┌─────────────────────────────────┐
+                           │   Claim-Aware Evidence Fusion   │
+                           │  • Category-Weighted / ML Model │
+                           └────────────────┬────────────────┘
+                                            │
+                                            ▼
+                           ┌─────────────────────────────────┐
+                           │    4-State Uncertainty Engine   │
+                           │ SUPPORTED / CONTRADICTED /      │
+                           │ INSUFFICIENT_EVIDENCE /         │
+                           │ OUT_OF_SCOPE                    │
+                           └────────────────┬────────────────┘
+                                            │
+                                            ▼
+                           ┌─────────────────────────────────┐
+                           │   Constrained Response Repair   │
+                           │  • Prune contradicted claims    │
+                           │  • Reconstruct grounded facts   │
+                           │  • Re-Verification Safety Loop  │
+                           └─────────────────────────────────┘
+```
+
+---
+
+## 🏷️ 12-Class Claim Taxonomy
+
+VGuard categorizes every extracted proposition into a structured 12-class taxonomy:
+
+| ID | Claim Type | Description | Example Proposition |
 |---|---|---|---|
-| 1 | `OBJECT_EXISTENCE` | Primary/secondary entity presence | *"A dog exists."* |
-| 2 | `OBJECT_COUNT` | Numerical quantification | *"There are three cars."* |
-| 3 | `COLOR` | Color channel and hue distribution | *"The car is red."* |
-| 4 | `ATTRIBUTE` | Physical descriptor / material / state | *"The dog is large."* |
-| 5 | `ACTION` | Dynamic physical movement / verb | *"The person is running."* |
-| 6 | `INTERACTION` | Physical interaction between entities | *"The woman is holding a cup."* |
-| 7 | `SPATIAL_RELATION` | Geometric prepositional location | *"The cup is on top of the table."* |
-| 8 | `COMPARISON` | Relative sizing / positioning | *"The left car is larger."* |
-| 9 | `OCR_TEXT` | Embedded text tokens / signage | *"The sign says STOP."* |
-| 10 | `SCENE` | Global environment / background | *"The image shows a beach."* |
-| 11 | `NEGATIVE_CLAIM` | Asserted absence of entity / feature | *"There is no bicycle."* |
-| 12 | `OUT_OF_SCOPE` | Non-visual external knowledge | *"This was taken in Paris."* |
+| 1 | `OBJECT_EXISTENCE` | Primary or secondary physical entity presence | *"A bicycle exists in the foreground."* |
+| 2 | `OBJECT_COUNT` | Numerical quantification of discrete entities | *"There are three chairs at the table."* |
+| 3 | `COLOR` | Color channel and hue distribution of an entity | *"The car is bright red."* |
+| 4 | `ATTRIBUTE` | Physical descriptor, material, shape, or state | *"The dog is large and fluffy."* |
+| 5 | `ACTION` | Dynamic physical movement or activity | *"The person is running along the path."* |
+| 6 | `INTERACTION` | Physical interaction between two or more entities | *"The child is holding an ice cream cone."* |
+| 7 | `SPATIAL_RELATION` | Geometric and topological prepositional location | *"The laptop is on top of the desk."* |
+| 8 | `COMPARISON` | Relative sizing, positioning, or property scaling | *"The red car is larger than the blue truck."* |
+| 9 | `OCR_TEXT` | Embedded text tokens, signage, or typography | *"The road sign says STOP."* |
+| 10 | `SCENE` | Global environment, weather, and setting context | *"The scene is an outdoor mountain landscape."* |
+| 11 | `NEGATIVE_CLAIM` | Asserted absence of an entity or attribute | *"There are no pedestrians on the sidewalk."* |
+| 12 | `OUT_OF_SCOPE` | Non-visual, historical, or external knowledge | *"This event took place during 1945 in Berlin."* |
 
 ---
 
-## 9. Open-Vocabulary Evidence Verification & Verifier Router
+## 🔀 Specialized Verifier Ensemble & Routing Matrix
 
-Claims are routed to specialized domain verifiers:
+Extracted claims are dispatched to specialized domain verifiers:
 
-| Claim Type | Primary Verifier | Secondary Verifier |
-|---|---|---|
-| `OBJECT_EXISTENCE` | Open-Vocabulary Grounding Verifier | Scene Verifier |
-| `OBJECT_COUNT` | Open-Vocabulary Grounding Verifier | Spatial Geometry Verifier |
-| `COLOR` / `ATTRIBUTE` | Local Region Attribute Matcher | Open-Vocabulary Grounding |
-| `ACTION` / `INTERACTION` | VQA Relational Judge | Spatial Geometry Verifier |
-| `SPATIAL_RELATION` | Spatial Geometry Verifier | VQA Relational Judge |
-| `COMPARISON` | Spatial Geometry Verifier | Attribute Matcher |
-| `OCR_TEXT` | Optical Character Recognition Engine | Attribute Matcher |
-| `SCENE` | Global Environment Context Classifier | Attribute Matcher |
-| `NEGATIVE_CLAIM` | Absence & Non-Existence Verifier | Open-Vocabulary Grounding |
-| `OUT_OF_SCOPE` | External Knowledge / Scope Filter | Scene Verifier |
-
----
-
-## 10. Evidence Fusion & 4-State Uncertainty Modeling
-
-### 5 Fusion Strategies Implemented:
-1. **Single Verifier Baseline**: Evaluates primary verifier only.
-2. **Uniform Average Baseline**: $S = \frac{1}{N} \sum_{i=1}^N S_i$.
-3. **Category-Weighted Fusion**: Claim-type specific linear weighting.
-4. **Calibrated Logistic Regression ML Fusion**: Learned feature vector $[S_{\text{mean}}, S_{\text{max}}, \sigma_{\text{disagreement}}]$.
-5. **CAM-V Claim-Aware Fusion**: $P(y \mid \text{claim\_type}, \text{evidence}_1, \dots, \text{disagreement})$.
-
-### 4 Formally Defined Verdict States:
-- **`SUPPORTED`** ($\ge 0.70$): Sufficient visual evidence supports the claim.
-- **`CONTRADICTED`** ($< 0.40$): Sufficient visual evidence conflicts with the claim.
-- **`INSUFFICIENT_EVIDENCE`** ($0.40 \le S < 0.70$): Visual evidence is ambiguous or inconclusive.
-- **`OUT_OF_SCOPE`**: Claim cannot reasonably be verified from image features alone without external metadata.
+| Claim Type | Primary Verifier | Secondary Verifier | Verification Mechanism |
+|---|---|---|---|
+| `OBJECT_EXISTENCE` | Open-Vocabulary Grounding | Scene Verifier | Zero-shot YOLO-World / Open-Vocab BBox grounding |
+| `OBJECT_COUNT` | Count Verifier | Spatial Geometry | Bounding box clustering + Non-Maximum Suppression (NMS) |
+| `COLOR` / `ATTRIBUTE` | Region Attribute Matcher | Open-Vocabulary Grounding | Cropped region color histogram & feature embeddings |
+| `ACTION` / `INTERACTION` | Relational Action Judge | Spatial Geometry | Spatial overlap calculus + semantic relational verification |
+| `SPATIAL_RELATION` | Spatial Geometry Verifier | Relational Judge | 2D/3D coordinate calculus (IoU, centroid deltas, containment) |
+| `COMPARISON` | Spatial Geometry Verifier | Attribute Matcher | Relative bounding box area and dimension comparative calculus |
+| `OCR_TEXT` | OCR Text Engine | Attribute Matcher | Optical Character Recognition + Levenshtein fuzzy string distance |
+| `SCENE` | Global Scene Classifier | Attribute Matcher | Whole-image scene embeddings & environmental classification |
+| `NEGATIVE_CLAIM` | Absence Verifier | Open-Vocabulary Grounding | Inverse threshold verification across high-confidence regions |
+| `OUT_OF_SCOPE` | Scope & External Filter | Scene Verifier | Multimodal verifiability gating & knowledge boundary check |
 
 ---
 
-## 11. Evidence Provenance
+## 🌲 Claim Dependency Graph (DAG) & Cascading Falsification
 
-Every final verdict is fully traceable and auditable:
+VGuard constructs a Directed Acyclic Graph (DAG) representing the linguistic dependencies of the response.
+
+```
+C1: "A woman exists" (Entity Root)
+├── C2: "Wearing a jacket" (Attribute) ──▶ C3: "The jacket is red" (Color)
+└── C4: "Riding a bicycle" (Action)    ──▶ C5: "A bicycle exists" (Entity Root)
+```
+
+### Cascading Falsification Principle:
+If root entity $C_1$ (*"A woman exists"*) is determined to be **`CONTRADICTED`** (i.e., no person is in the scene), VGuard automatically propagates the contradiction down to dependent child claims ($C_2, C_3, C_4$). This prevents false grounding attachments where a background object is mistakenly attributed to a non-existent subject.
+
+---
+
+## ⚖️ Evidence Fusion & 4-State Uncertainty Engine
+
+VGuard computes three directional scores for every claim:
+- **Support Score ($S$)** $\in [0, 1]$
+- **Contradiction Score ($C$)** $\in [0, 1]$
+- **Uncertainty Score ($U$)** $\in [0, 1]$
+
+### 5 Fusion Modes Implemented:
+1. **Single Verifier Baseline**: Utilizes primary verifier evidence directly.
+2. **Uniform Average Baseline**: $S_{\text{fused}} = \frac{1}{N} \sum_{i=1}^N S_i$.
+3. **Category-Weighted Fusion**: Claim-type specific linear weighting matrix.
+4. **Calibrated ML Fusion**: Logistic regression trained on feature vector $[S_{\text{mean}}, S_{\text{max}}, C_{\text{max}}, \sigma_{\text{disagreement}}]$.
+5. **Claim-Aware CAM-V Fusion**: $P(y \mid \text{claim\_type}, \text{evidence}_1 \dots \text{evidence}_k, \Delta_{\text{conflict}})$.
+
+### Formal 4-State Verdict Criteria:
+```
+┌───────────────────────────┬────────────────────────────────────────────────────────┐
+│ State                     │ Formal Decision Condition                              │
+├───────────────────────────┼────────────────────────────────────────────────────────┤
+│ SUPPORTED                 │ S_fused ≥ 0.70 AND C_fused < 0.40                      │
+│ CONTRADICTED              │ C_fused ≥ 0.50 OR S_fused < 0.35                       │
+│ INSUFFICIENT_EVIDENCE     │ 0.35 ≤ S_fused < 0.70 AND C_fused < 0.50               │
+│ OUT_OF_SCOPE              │ Claim requires external world metadata / non-visual    │
+└───────────────────────────┴────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 🔍 Auditable Evidence Provenance
+
+Every decision includes full mathematical traceability and bounding box provenance:
+
 ```json
 {
-  "claim": "The man is holding a red umbrella",
+  "claim_id": "C3",
+  "claim_text": "The woman is wearing a red jacket",
+  "claim_type": "color",
   "final_verdict": "SUPPORTED",
-  "confidence": 0.89,
+  "confidence": 0.892,
+  "support_score": 0.892,
+  "contradiction_score": 0.045,
+  "uncertainty_score": 0.063,
   "evidence": [
     {
       "source": "open_vocab_grounding",
-      "result": "umbrella detected",
+      "result": "jacket detected",
       "confidence": 0.94,
-      "region": [0.12, 0.21, 0.45, 0.60]
+      "bounding_box": [0.15, 0.22, 0.48, 0.65]
     },
     {
       "source": "attribute_verifier",
-      "result": "red color alignment",
-      "confidence": 0.81
-    },
-    {
-      "source": "action_interaction_vlm",
-      "result": "holding interaction confirmed",
-      "confidence": 0.78
+      "result": "red color alignment confirmed",
+      "confidence": 0.86,
+      "details": {"dominant_hue": "red", "saturation": 0.82}
     }
   ],
   "fusion_math": {
-    "formula": "Fused Score = ((0.70 × 0.78) + (0.15 × 0.81) + (0.15 × 0.94)) / 1.00 = 0.809"
+    "formula": "Fused = ((0.65 × 0.86) + (0.35 × 0.94)) / 1.00 = 0.888",
+    "weights_used": {"attribute_verifier": 0.65, "open_vocab_grounding": 0.35}
   }
 }
 ```
 
 ---
 
-## 12. Constrained Response Repair & Re-Verification
+## 🛠️ Constrained Response Repair & Re-Verification Loop
 
-VisionGuard repairs hallucinated responses through constrained factual synthesis:
+When hallucinations are detected, VGuard repairs the response:
+
 ```
 Original Response ──▶ Claim Graph ──▶ Identify Contradictions ──▶ Strip Contradictions
-                                                                           │
-                                                                           ▼
-Re-Verified Output ◀── Re-Verification Loop ◀── Constrained Synthesis ◀── Verified Facts
+                                                                            │
+                                                                            ▼
+Re-Verified Output ◀── Re-Verification Pass ◀── Constrained Synthesis ◀── Verified Facts
 ```
 
-*Example:*
-- **Original:** *"A woman wearing a red jacket is riding a bicycle near the Eiffel Tower."*
-- **Verified Facts:** $\checkmark$ Woman exists, $\checkmark$ Wearing red jacket, $\checkmark$ Riding bicycle.
-- **Removed Claims:** $\times$ Eiffel Tower is visible (Out of Scope / Contradicted).
-- **Repaired Text:** *"A woman wearing a red jacket is riding a bicycle."*
-- **Re-Verification Verdict:** `SUPPORTED` (Confidence: 91.2%).
+### Real-World Example:
+- **Original Response**: *"A brown dog is sitting beside a red bicycle. The dog is an astronaut wearing a space helmet."*
+- **Verified Claims**:
+  - $\checkmark$ `C1`: Dog exists (`SUPPORTED`, $94.2\%$)
+  - $\checkmark$ `C2`: Dog is brown (`SUPPORTED`, $89.0\%$)
+  - $\checkmark$ `C3`: Bicycle exists (`SUPPORTED`, $91.5\%$)
+  - $\checkmark$ `C4`: Bicycle is red (`SUPPORTED`, $88.2\%$)
+- **Contradicted Claims**:
+  - $\times$ `C5`: Dog is an astronaut (`CONTRADICTED`, $96.1\%$)
+  - $\times$ `C6`: Space helmet present (`CONTRADICTED`, $93.4\%$)
+- **Repaired Response**: *"A brown dog is sitting beside a red bicycle."*
+- **Re-Verification Verdict**: `SUPPORTED` (Overall Confidence: $92.4\%$).
 
 ---
 
-## 13. Adversarial Hallucination Generation
+## ⚡ Adversarial Hallucination Generator (7 Operators)
 
-VisionGuard includes a systematic perturbation engine generating 7 controlled adversarial variants:
-1. **Object Swap**: *"A man is riding a bicycle"* $\rightarrow$ *"A man is riding a boat"*.
-2. **Attribute Swap**: *"The car is red"* $\rightarrow$ *"The car is bright blue"*.
-3. **Count Perturbation**: *"A dog is sitting"* $\rightarrow$ *"Three dogs are sitting"*.
-4. **Relation Swap**: *"The bicycle is near the park"* $\rightarrow$ *"The bicycle is flying above the park"*.
-5. **Negation Inversion**: *"The boy is riding a bicycle"* $\rightarrow$ *"The boy is not riding a bicycle"*.
-6. **Entity Swap**: *"The boy is riding"* $\rightarrow$ *"The elderly astronaut is riding"*.
-7. **OCR Perturbation**: *"The sign says SLOW"* $\rightarrow$ *"The sign says STOP"*.
+VGuard includes a systematic perturbation engine for automated stress testing:
+
+1. **Object Swap**: Substitutes detected objects with plausible distractors (*"person on a bicycle"* $\rightarrow$ *"person on a motorcycle"*).
+2. **Attribute Swap**: Modifies colors, sizes, or materials (*"red jacket"* $\rightarrow$ *"neon green jacket"*).
+3. **Count Perturbation**: Alters numerical quantifiers (*"two birds"* $\rightarrow$ *"five birds"*).
+4. **Spatial Relation Inversion**: Inverts prepositional relationships (*"on top of the desk"* $\rightarrow$ *"underneath the desk"*).
+5. **Negation Inversion**: Flips polarity of assertions (*"no cars are visible"* $\rightarrow$ *"cars are visible"*).
+6. **Entity Swap**: Replaces subject entities with rare or impossible categories (*"a young boy is running"* $\rightarrow$ *"an astronaut is running"*).
+7. **OCR Perturbation**: Modifies embedded text characters (*"STOP sign"* $\rightarrow$ *"SLOW sign"*).
 
 ---
 
-## 14. Evaluation Methodology & 6 Core Experiments
+## 📊 Scientific Evaluation Suite (6 Core Experiments)
 
-VisionGuard provides 6 formal evaluation experiment suites:
+VGuard provides 6 automated, reproducible experiment runners:
 
-| Experiment | Purpose | Core Metrics |
+| Experiment | Focus Area | Evaluated Metrics |
 |---|---|---|
-| **Exp 1: Claim Classification** | Evaluates fine-grained claim classification | Precision, Recall, F1, Macro F1, AUROC, Per-Category F1 |
-| **Exp 2: Baseline Comparison** | Compares CAM-V vs. 4 baseline systems | F1 Score, AUROC across 5 architectures |
-| **Exp 3: Ablation Study** | Section 14 ablation (A0 to A5 configurations) | $\Delta \text{F1}\%$, component contribution |
-| **Exp 4: Robustness Evaluation** | Tests stability under paraphrasing & perturbations | Score variance, order invariance, negation sensitivity |
-| **Exp 5: Human Alignment** | Evaluates agreement with human expert annotations | Cohen's Kappa ($\kappa$), Pearson correlation ($r$) |
-| **Exp 6: Guardrail & Repair** | Measures before/after hallucination mitigation | $\text{Hal}_{\text{main}}$, $\#\text{Hal}_{\text{extra}}$, $\text{Hal}_{\text{overall}}$, Repair Success Rate |
+| **Exp 1: Claim Classification** | Granular claim-level accuracy across 12 types | Precision, Recall, Macro F1, AUROC, Per-Category F1 |
+| **Exp 2: Baseline Comparison** | CAM-V vs. 4 baseline architectures | F1 Score, AUROC, Brier Calibration Score |
+| **Exp 3: Section 14 Ablation** | Component contribution (A0 to A5 setups) | $\Delta \text{F1}\%$, Grounding Gain, DAG Propagation Gain |
+| **Exp 4: Robustness Evaluation** | Stability under linguistic perturbations | Score Variance, Order Invariance, Negation Sensitivity |
+| **Exp 5: Human Alignment** | Agreement with expert human annotations | Cohen's Kappa ($\kappa$), Pearson Correlation ($r$) |
+| **Exp 6: Guardrail Effectiveness** | Before/after hallucination mitigation | $\text{Hal}_{\text{main}}$, $\#\text{Hal}_{\text{extra}}$, Latency (ms) |
 
 ---
 
-## 15. HQM Psychometric Reliability & Validity
+## 🧠 HQM Psychometric Reliability & Validity
 
-Implements psychometric indicators from *Yan et al. (2024)*:
-- **Test-Retest Reliability ($r > 0.95$)**: Score consistency across repeated evaluations.
-- **Parallel-Forms Reliability ($\rho > 0.90$)**: Robustness under paraphrased query perturbations.
-- **Content Validity ($N_{valid}/N > 95\%$)**: Verification of unambiguous question-image pairs.
-- **Criterion Validity ($r_{human} > 0.90$)**: Correlation with human ground-truth evaluations.
+VGuard integrates the Hallucination Quality Measurement (HQM) framework (*Yan et al., arXiv:2406.17115v3*):
 
----
-
-## 16. Repository Structure
-
-```
-VGuard/
-├── 2406.17115v3.pdf                    # Research paper (HQM/HQH benchmark methodology)
-├── VisionGuard_Detailed_Project_Plan.md # Technical specification document
-├── README.md                           # Master project blueprint
-├── requirements.txt                    # Project dependencies
-├── run.py                              # Unified CLI runner
-├── tests/                              # Unit & integration test suite (18 tests)
-│   ├── test_api.py                     # API route & multipart upload tests
-│   ├── test_claim_extractor.py         # 12-class extraction & negation tests
-│   ├── test_evidence_fusion.py         # 5 fusion strategies & math tests
-│   ├── test_hqm_eval.py                # HQM psychometric reliability tests
-│   ├── test_repair_and_adversarial.py  # Response repair & adversarial generator tests
-│   └── test_verifiers.py               # Specialized domain verifier tests
-└── visionguard/                        # Core Python package
-    ├── schemas.py                      # Pydantic models (12 ClaimTypes, 4 Verdicts, Provenance)
-    ├── config.py                       # Global thresholds and taxonomy settings
-    ├── data_loader.py                  # VisionGuard-Claims benchmark dataset
-    ├── cli.py                          # CLI implementation
-    ├── api/
-    │   └── main.py                     # FastAPI REST server & 10 endpoints
-    ├── pipeline/
-    │   ├── claim_extractor.py          # Structured proposition extractor with polarity
-    │   ├── dependency_graph.py         # Claim Dependency Graph (DAG)
-    │   ├── claim_classifier.py         # 12-class taxonomy classifier
-    │   ├── evidence_router.py          # Specialized verifier router
-    │   ├── evidence_fusion.py          # Uniform, Weighted, Logistic & Claim-Aware fusion
-    │   ├── uncertainty_engine.py       # 4-state uncertainty engine
-    │   ├── image_processor.py          # Automated raw image processor
-    │   └── orchestrator.py             # CAM-V pipeline coordinator
-    ├── verifiers/
-    │   ├── object_verifier.py          # Open-vocabulary grounding verifier
-    │   ├── attribute_verifier.py       # Region attribute & color matcher
-    │   ├── spatial_verifier.py         # Geometric spatial calculus verifier
-    │   ├── action_verifier.py          # Semantic action / VQA relational verifier
-    │   ├── ocr_verifier.py             # Optical Character Recognition verifier
-    │   ├── absence_verifier.py         # Negative claim / absence verifier
-    │   └── scene_verifier.py           # Scene context & Out-of-Scope filter
-    ├── repair/
-    │   └── repair_engine.py            # Constrained response repair & re-verification
-    ├── baselines/
-    │   ├── whole_response_judge.py     # Monolithic VLM judge baseline
-    │   └── similarity_baseline.py      # Global embedding similarity baseline
-    ├── eval/
-    │   ├── hqm_evaluator.py            # HQM psychometric evaluation suite
-    │   ├── benchmark_runner.py         # Comparative benchmark runner (CAM-V vs 4 baselines)
-    │   ├── ablation.py                 # Section 14 ablation runner (A0 to A5)
-    │   ├── adversarial.py              # 7-operator adversarial hallucination generator
-    │   ├── experiment_claim_classification.py # Experiment 1 runner
-    │   ├── experiment_robustness.py    # Experiment 4 runner
-    │   ├── experiment_human_alignment.py # Experiment 5 runner
-    │   └── experiment_guardrail.py     # Experiment 6 runner
-    └── static/                         # Web Dashboard UI
-        ├── index.html                  # Executive dark dashboard
-        ├── styles.css                  # Zinc/Charcoal theme (#09090b)
-        └── app.js                      # Interactivity, Chart.js charts & CoT accordions
-```
+- **Test-Retest Reliability ($r > 0.95$)**: Measures evaluation consistency across repeated inference passes.
+- **Parallel-Forms Reliability ($\rho > 0.90$)**: Evaluates score stability under semantic paraphrasing.
+- **Content Validity ($N_{\text{valid}} / N > 95\%$)**: Guarantees unambiguous image-claim correspondence.
+- **Criterion Validity ($r_{\text{human}} > 0.90$)**: Empirically validates correlation against human expert judgments.
 
 ---
 
-## 17. RESTful API Specification
+## 💻 Installation & Setup
 
-The FastAPI server provides 10 endpoints:
+### Prerequisites
+- Python 3.10 or higher
+- PyTorch 2.1+
+- Tesseract OCR (optional, for OCR claim verification)
+- macOS / Linux / Windows (WSL2 recommended)
 
-| Method | Endpoint | Description | Request Payload / Params |
-|---|---|---|---|
-| `GET` | `/api/health` | Service health and version check | None |
-| `POST` | `/api/analyze` | Full CAM-V claim verification & repair | `{"response_text": str, "visual_features": dict}` |
-| `POST` | `/api/upload_and_analyze` | Multipart raw image upload & verification | `file` (binary), `response_text` (optional) |
-| `POST` | `/api/repair` | Constrained response repair & re-verification | `{"response_text": str, "visual_features": dict}` |
-| `POST` | `/api/adversarial/generate` | Generates 7 adversarial hallucination variants | `{"claims": [str]}` |
-| `GET` | `/api/experiments/run` | Runs all 6 core evaluation experiments | None |
-| `GET` | `/api/leaderboard` | 8-dimension model evaluation leaderboard | None |
-| `GET` | `/api/hqm` | HQM benchmark quality measurement table | None |
-| `GET` | `/api/benchmark/run` | Comparative evaluation (CAM-V vs 4 baselines) | None |
-| `GET` | `/api/ablation/run` | 6-configuration ablation study (A0 to A5) | None |
-| `POST` | `/api/guardrail/apply` | Live prompt decoration & response repair | `{"prompt": str, "response_text": str}` |
-
----
-
-## 19. CLI Reference
-
+### 1. Clone the Repository
 ```bash
-# 1. Start FastAPI server & Web Dashboard on port 8000
+git clone https://github.com/DhruvR-16/VGuard.git
+cd VGuard
+```
+
+### 2. Create and Activate Virtual Environment
+```bash
+python3 -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+```
+
+### 3. Install Dependencies
+```bash
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+### 4. Optional: Verify Tesseract OCR Installation
+```bash
+# macOS
+brew install tesseract
+
+# Ubuntu / Debian
+sudo apt-get install tesseract-ocr
+```
+
+### 5. Environment Configuration
+Copy the sample environment file:
+```bash
+cp .env.example .env
+```
+
+---
+
+## 🚀 Quick Start & Usage
+
+### 1. Launch the FastAPI Server & Web Dashboard
+```bash
 python3 run.py server --port 8000
+```
+Open your browser and navigate to: **`http://127.0.0.1:8000`**
 
-# 2. Analyze a text response (with image or feature context)
-python3 run.py analyze "A young boy wearing a red shirt is riding a bicycle near a park." --image data/images/000001.jpg
+### 2. Verify a Response via CLI
+```bash
+python3 run.py analyze "A young boy wearing a red shirt is riding a bicycle." --image data/images/000001.jpg
+```
 
-# 3. Perform constrained response repair
+### 3. Repair a Hallucinated Caption
+```bash
 python3 run.py repair "A brown dog is sitting beside a red bicycle. The dog is an astronaut." --image data/images/000002.jpg
+```
 
-# 4. Generate adversarial hallucination test cases
-python3 run.py adversarial "A man is riding a bicycle near the river."
-
-# 5. Run comparative benchmark evaluation across independent baselines
+### 4. Run the Evaluation Experiment Suite
+```bash
+# Run comparative baseline benchmarks
 python3 run.py eval --experiment benchmark
 
-# 6. Run Section 14 ablation experiments (A0 to A5)
+# Run Section 14 ablation studies
 python3 run.py eval --experiment ablation
 
-# 7. Run real Order Invariance & Negation Sensitivity robustness experiments
+# Run robustness & order invariance tests
 python3 run.py eval --experiment robustness
 
-# 8. Run multi-annotator Human Alignment & Cohen's Kappa evaluation
-python3 run.py eval --experiment human_alignment
-
-# 9. Run Response Repair Guardrail with real latency measurement
-python3 run.py eval --experiment guardrail
-
-# 10. Run complete 5-experiment suite
+# Run all 6 evaluation experiments
 python3 run.py eval --experiment all
 ```
 
 ---
 
-## 19. What Was Removed, Replaced, and Added
+## ⌨️ CLI Reference
 
-### What Was Removed / Replaced:
-- ❌ **Removed**: Fixed-category ImageNet classification as the sole verification backbone.
-- ❌ **Removed**: Simple heuristic color extraction and bounding-box overlap as proof of semantic physical interactions.
-- ❌ **Removed**: Fixed mock metrics; separated in-memory demonstration datasets from experimental evaluation pipelines.
-- ❌ **Removed**: Claiming "HQH (Ours)" (properly attributed to Yan et al., 2024).
+The `run.py` script provides a unified CLI for all operations:
 
-### What Was Added:
--  **Open-Vocabulary Visual Grounding**: Arbitrary concept detection and bounding box localization.
--  **12-Class Claim Taxonomy**: Covers existence, count, color, attribute, action, interaction, spatial, comparison, OCR, scene, negation, and out-of-scope.
--  **Structured Semantic Extraction with Negation & Polarity**: Explicit polarity parsing with Claim Dependency Graph (DAG) construction.
--  **Specialized Verifier Router**: 7 specialized domain verifiers (Grounding, Attribute, Spatial, Action/VQA, OCR, Absence, Scene).
--  **4 Formally Defined Decision States**: `SUPPORTED`, `CONTRADICTED`, `INSUFFICIENT_EVIDENCE`, `OUT_OF_SCOPE`.
--  **Traceable Evidence Provenance**: Auditable verifier logs, bounding boxes, and explicit `FusionMath` formulas.
--  **Constrained Response Repair**: Factually grounded response reconstruction with re-verification loop.
--  **Adversarial Hallucination Generation**: 7 systematic perturbation operators.
--  **6 Comprehensive Evaluation Experiments**: Baseline comparisons, Section 14 ablations, robustness, human alignment ($\kappa$), guardrail mitigation, and HQM reliability.
+```bash
+usage: run.py [-h] {server,analyze,repair,eval,ablation,experiments,adversarial} ...
 
----
+Available commands:
+  server         Launch FastAPI REST server and interactive Web Dashboard
+  analyze        Analyze and verify factual claims in a VLM response
+  repair         Perform constrained response repair on a hallucinated response
+  eval           Execute benchmark or scientific evaluation experiments
+  ablation       Run Section 14 ablation experiment suite (A0 to A5)
+  experiments    Run all 6 scientific evaluation experiments
+  adversarial    Generate 7-operator adversarial hallucination test suite
+```
 
-## 20. Final Research Contribution
-
-> **VisionGuard introduces a claim-aware multi-evidence verification framework for Vision-Language Model outputs. Instead of evaluating an entire response with a single evaluator, the system decomposes responses into atomic factual claims and routes each claim to specialized visual verification mechanisms. Evidence is combined using uncertainty-aware claim-specific fusion, enabling hallucination detection, evidence provenance, and constrained response repair. The framework is evaluated using claim-level classification, adversarial hallucinations, baseline comparison, ablation studies, human agreement, and HQM-inspired reliability and validity analysis.**
-
-### The Core Hypothesis:
-$$\boxed{\text{Claim-aware specialized verification} > \text{Monolithic response-level verification}}$$
+### Command Flags:
+- `server`: `--host` (default: 127.0.0.1), `--port` (default: 8000), `--reload`
+- `analyze`: `text` (required), `--image` (path), `--mock` (run with mock backends)
+- `repair`: `text` (required), `--image` (path), `--mock`
+- `eval`: `--experiment {benchmark,ablation,robustness,human_alignment,guardrail,claim_classification,all}`, `--split {train,val,test}`, `--mock`
+- `adversarial`: `claim` (required base factual proposition)
 
 ---
 
-## 21. References & Citation
+## 🐍 Python SDK & Programmatic API
+
+You can use VGuard directly within your Python applications:
+
+```python
+from visionguard.pipeline.orchestrator import CAMVOrchestrator
+from visionguard.schemas import Verdict
+
+# 1. Initialize the VGuard CAM-V Orchestrator
+orchestrator = CAMVOrchestrator(use_mock=False)
+
+# 2. Analyze a VLM generated response against an image
+response_text = "A young boy wearing a red shirt is riding a bicycle near a park."
+image_path = "data/images/000001.jpg"
+
+result = orchestrator.analyze(
+    response_text=response_text,
+    image_input=image_path,
+    enable_repair=True
+)
+
+# 3. Inspect Overall Verdict & Confidence
+print(f"Overall Verdict: {result.overall_verdict.value}")
+print(f"Confidence: {result.overall_confidence:.1%}")
+print(f"Hallucination Probability: {result.hallucination_probability:.1%}")
+
+# 4. Iterate over Atomic Claims
+for item in result.claims:
+    claim = item.claim
+    print(f"\nClaim [{claim.claim_id}] ({claim.type.value}): '{claim.text}'")
+    print(f"  Verdict: {item.verdict.value} (Fused Score: {item.fused_score:.3f})")
+    if item.evidence:
+        for ev in item.evidence:
+            print(f"    - {ev.source}: {ev.result} (score: {ev.support_score:.2f})")
+
+# 5. Retrieve Constrained Repaired Response
+if result.repaired_response:
+    print(f"\nRepaired Response: '{result.repaired_response.repaired_text}'")
+    print(f"Removed Claims: {result.repaired_response.removed_claims}")
+```
+
+---
+
+## 📡 RESTful API Specification
+
+The FastAPI server provides 10 REST endpoints:
+
+| Method | Endpoint | Description | Request Format |
+|---|---|---|---|
+| `GET` | `/api/health` | Service health, status, and version | None |
+| `POST` | `/api/analyze` | Full CAM-V claim verification & repair | JSON: `{"response_text": str, "visual_features": dict}` |
+| `POST` | `/api/upload_and_analyze` | Multipart raw image upload & verification | Multipart: `file` (binary), `response_text` (str) |
+| `POST` | `/api/repair` | Constrained response repair & re-verification | JSON: `{"response_text": str, "visual_features": dict}` |
+| `POST` | `/api/adversarial/generate` | Generates 7 adversarial variants per claim | JSON: `{"claims": [str]}` |
+| `GET` | `/api/experiments/run` | Executes all 6 scientific evaluation experiments | None |
+| `GET` | `/api/leaderboard` | 8-dimension model evaluation leaderboard | None |
+| `GET` | `/api/hqm` | HQM benchmark psychometric quality table | None |
+| `GET` | `/api/benchmark/run` | Comparative evaluation (CAM-V vs 4 baselines)| None |
+| `GET` | `/api/ablation/run` | 6-configuration ablation study (A0 to A5) | None |
+| `POST` | `/api/guardrail/apply` | Live prompt decoration & guardrail repair | JSON: `{"prompt": str, "response_text": str}` |
+
+### Example cURL Request:
+```bash
+curl -X POST "http://127.0.0.1:8000/api/analyze" \
+     -H "Content-Type: application/json" \
+     -d '{
+       "response_text": "A woman wearing a red jacket is riding a bicycle.",
+       "visual_features": {
+         "objects": {"woman": 0.95, "bicycle": 0.92, "jacket": 0.90},
+         "color_distribution": {"red": 0.40}
+       }
+     }'
+```
+
+---
+
+## 🖥️ Interactive Web Dashboard
+
+VGuard includes a dark-mode Web Dashboard featuring:
+
+- **CAM-V Playground**: Drag-and-drop image upload, real-time claim decomposition, bounding box visualizer, and CoT reasoning logs.
+- **HQM Framework**: Psychometric reliability and validity measurement tables.
+- **8D Leaderboard**: Multimodal model rankings across 8 perceptual dimensions.
+- **Baselines & Ablation**: Interactive Chart.js comparative performance visualizations.
+- **Live Guardrail**: Real-time response repair simulation with latency tracking.
+
+To access the dashboard, run `python3 run.py server` and open `http://127.0.0.1:8000`.
+
+---
+
+## 📁 Repository Structure
+
+```
+VGuard/
+├── README.md                           # Master documentation & project specification
+├── requirements.txt                    # Python package dependencies
+├── run.py                              # Unified CLI entry point
+├── .env.example                        # Example environment configuration
+├── 2406.17115v3.pdf                    # Research paper (HQM/HQH methodology foundation)
+├── data/                               # Datasets & benchmark annotations
+│   ├── annotations/                    # Ground truth annotations
+│   ├── images/                         # Sample evaluation images
+│   └── visionguard_claims_v0.1.jsonl   # Claim-level benchmark dataset
+├── tests/                              # Unit & integration test suite
+│   ├── test_api.py                     # FastAPI endpoint tests
+│   ├── test_claim_extractor.py         # 12-class extraction & DAG tests
+│   ├── test_count_verifier.py          # Object count & NMS clustering tests
+│   ├── test_evidence_fusion.py         # Directional fusion & uncertainty tests
+│   ├── test_hqm_eval.py                # HQM psychometric reliability tests
+│   ├── test_integration_real_images.py # End-to-end real image inference tests
+│   ├── test_repair_and_adversarial.py  # Response repair & perturbation tests
+│   └── test_verifiers.py               # Specialized domain verifier tests
+└── visionguard/                        # Core Python package
+    ├── schemas.py                      # Pydantic schemas (12 ClaimTypes, 4 Verdicts, Evidence)
+    ├── config.py                       # Global thresholds and configuration
+    ├── cli.py                          # CLI implementation
+    ├── data_loader.py                  # Benchmark data loader & fixtures
+    ├── api/
+    │   └── main.py                     # FastAPI REST application
+    ├── pipeline/
+    │   ├── claim_extractor.py          # Structured claim & polarity parser
+    │   ├── dependency_graph.py         # Claim Dependency Graph (DAG) engine
+    │   ├── claim_classifier.py         # 12-class taxonomy classifier
+    │   ├── evidence_router.py          # Verifier dispatch router
+    │   ├── evidence_fusion.py          # Directional evidence fusion engine
+    │   ├── uncertainty_engine.py       # 4-state formal uncertainty engine
+    │   ├── image_processor.py          # Raw image & feature preprocessing
+    │   └── orchestrator.py             # CAM-V pipeline coordinator
+    ├── verifiers/
+    │   ├── object_verifier.py          # Open-vocabulary YOLO-World grounding
+    │   ├── count_verifier.py           # Object count & NMS verifier
+    │   ├── attribute_verifier.py       # Region attribute & color matcher
+    │   ├── spatial_verifier.py         # 2D/3D coordinate calculus verifier
+    │   ├── action_verifier.py          # Relational action / VQA verifier
+    │   ├── ocr_verifier.py             # Optical Character Recognition engine
+    │   ├── absence_verifier.py         # Negative assertion / absence verifier
+    │   └── scene_verifier.py           # Global scene context & scope filter
+    ├── repair/
+    │   └── repair_engine.py            # Constrained response repair & re-verification
+    ├── baselines/
+    │   ├── whole_response_judge.py     # Monolithic VLM judge baseline
+    │   ├── claim_level_single_judge.py # Single judge baseline
+    │   └── similarity_baseline.py      # Embedding similarity baseline
+    ├── eval/
+    │   ├── hqm_evaluator.py            # HQM psychometric evaluation suite
+    │   ├── benchmark_runner.py         # Comparative benchmark runner
+    │   ├── ablation.py                 # Section 14 ablation study runner (A0 to A5)
+    │   ├── adversarial.py              # 7-operator adversarial generator
+    │   ├── experiment_claim_classification.py
+    │   ├── experiment_robustness.py
+    │   ├── experiment_human_alignment.py
+    │   └── experiment_guardrail.py
+    └── static/                         # Executive Web Dashboard
+        ├── index.html                  # Dashboard HTML layout
+        ├── styles.css                  # Dark mode styling (#09090b)
+        └── app.js                      # Reactive frontend & Chart.js charts
+```
+
+---
+
+## 📚 References
 
 1. **Bei Yan et al.**, *"Measuring the Measurers: Quality Evaluation of Hallucination Benchmarks for Large Vision-Language Models"*, arXiv:2406.17115, 2024.
 2. **Yiyang Zhou et al.**, *"Analyzing and Mitigating Object Hallucination in Large Vision-Language Models"*, Findings of ACL 2024.
 3. **Fuxiao Liu et al.**, *"Aligning Large Multimodal Models with Factually Augmented RLHF"*, NeurIPS 2023.
+4. **Tianrui Guan et al.**, *"HallusionBench: An Advanced Diagnostic Suite for Entangled Language & Vision Hallucinations"*, CVPR 2024.
 
 ---
 
-## 22. License
+## 📄 License
 
-This project is licensed under the **MIT License**.
+This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.

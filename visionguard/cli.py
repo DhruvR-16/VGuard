@@ -20,7 +20,7 @@ from visionguard.data_loader import get_sample_dataset, get_atomic_claims_datase
 
 def main():
     parser = argparse.ArgumentParser(
-        description="VisionGuard (CAM-V): Claim-Aware Multi-Evidence Verification & Response Repair"
+        description="VGuard (CAM-V): Claim-Aware Multi-Evidence Verification & Response Repair"
     )
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
