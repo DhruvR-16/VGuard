@@ -2,8 +2,7 @@
 
 > **Claim-Aware Multi-Evidence Hallucination Detection, Response Repair & Psychometric Quality Evaluation for Large Vision-Language Models (LVLMs)**
 
-[![Status: Active Development](https://img.shields.io/badge/Status-Active%20Development-orange?style=flat-square&logo=git)](https://github.com/DhruvR-16/VGuard)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](LICENSE)
+
 
 > [!NOTE]
 > **Active Research & Development**: VGuard is under active development with continuous updates, architectural refinements, and feature additions. APIs, verifier modules, and evaluation benchmarks are being actively iterated upon.
