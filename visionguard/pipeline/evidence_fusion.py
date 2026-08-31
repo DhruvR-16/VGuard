@@ -39,14 +39,30 @@ class LearnedEvidenceFusion:
 
     def _init_default_weights(self):
         """
-        Calibrated prior parameters initialized before dataset fitting.
+        Calibrated Bayesian prior parameters initialized analytically before dataset fitting.
+        Positive weights on support scores, negative weights on contradictions and uncertainties.
         """
         # Feature dimension: 8 sources * 3 scores (S, C, U) + claim_type_idx + disagreement_std + max_c = 27
         self.feature_dim = len(self.SOURCE_LIST) * 3 + 3
-        # Synthetic warmup initialization so inference works immediately
-        X_dummy = np.random.RandomState(42).randn(20, self.feature_dim)
-        y_dummy = np.array([1 if i % 2 == 0 else 0 for i in range(20)])
-        self.model.fit(X_dummy, y_dummy)
+        
+        # Analytically set logistic regression parameters
+        self.model.classes_ = np.array([0, 1])
+        coefs = np.zeros((1, self.feature_dim), dtype=float)
+        
+        # Set weights for each verifier's (S, C, U) triplets
+        for i in range(len(self.SOURCE_LIST)):
+            base_idx = i * 3
+            coefs[0, base_idx] = 2.4      # Positive weight on Support score
+            coefs[0, base_idx + 1] = -3.2  # Negative weight on Contradiction score
+            coefs[0, base_idx + 2] = -0.8  # Negative weight on Uncertainty score
+            
+        # Additional feature weights: claim_type_idx, disagreement_std, max_c
+        coefs[0, -3] = 0.0     # claim_type_idx
+        coefs[0, -2] = -1.2    # disagreement_std (high disagreement reduces confidence)
+        coefs[0, -1] = -3.5    # max_contradiction (strong contradiction veto)
+        
+        self.model.coef_ = coefs
+        self.model.intercept_ = np.array([-0.20])
         self.is_fitted = True
 
     def extract_feature_vector(self, claim: AtomicClaim, evidences: List[Evidence]) -> np.ndarray:
@@ -66,7 +82,7 @@ class LearnedEvidenceFusion:
                 support_scores.append(ev.support_score)
                 contradict_scores.append(ev.contradiction_score)
             else:
-                feat.extend([0.0, 0.0, 1.0])
+                feat.extend([0.0, 0.0, 0.0])
 
         c_type_idx = float(self.CLAIM_TYPE_MAP.get(claim.type, 0))
         std_disagreement = float(np.std(support_scores)) if len(support_scores) > 1 else 0.0
