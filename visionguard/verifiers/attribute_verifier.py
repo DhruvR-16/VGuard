@@ -43,6 +43,12 @@ class AttributeVerifier:
             )
 
         image_obj: Optional[Image.Image] = visual_features.get("image_obj") if visual_features else None
+        if image_obj is None and image_path and os.path.exists(image_path):
+            try:
+                image_obj = Image.open(image_path).convert("RGB")
+            except Exception:
+                image_obj = None
+
         bbox = self._find_object_bbox(target_entity, visual_features)
 
         # 1. Real CLIP Inference on Cropped Region if image is present
@@ -96,16 +102,22 @@ class AttributeVerifier:
             elif bbox is not None and target_color and "color_distribution" in visual_features:
                 # Bounding box is localized and color distribution provided
                 col_frac = float(visual_features["color_distribution"].get(target_color, 0.0))
-                clip_support = min(0.85, col_frac * 2.0) if col_frac > 0.08 else 0.20
-                clip_contradict = 1.0 - clip_support
+                clip_support = min(0.85, col_frac * 2.0) if col_frac > 0.08 else 0.15
+                clip_contradict = 0.75 if col_frac <= 0.08 else 0.10
             else:
                 # No localized object bounding box exists: Safe Insufficient Evidence
                 # Prevents global image background color from falsely verifying object-specific attributes
-                clip_support = 0.35
-                clip_contradict = 0.20
+                clip_support = 0.10
+                clip_contradict = 0.15
 
         # Calculate directional scores
-        if clip_support >= 0.40:
+        if bbox is None and image_obj is None and visual_features is not None and not visual_features.get("attributes"):
+            # Explicit ungrounded entity attribute check -> High Uncertainty
+            support_s = 0.10
+            contradict_s = 0.15
+            uncertainty_s = 0.75
+            res_str = f"Insufficient visual evidence: Target object '{target_entity}' not localized for attribute verification."
+        elif clip_support >= 0.40:
             support_s = round(min(0.95, clip_support * 1.5), 3)
             contradict_s = round(max(0.05, clip_contradict * 0.4), 3)
             uncertainty_s = round(max(0.05, 1.0 - support_s - contradict_s), 3)
@@ -124,9 +136,9 @@ class AttributeVerifier:
         else:
             # Absence of visual evidence / unlocalized object: Insufficient Evidence, NOT contradiction
             support_s = 0.10
-            contradict_s = 0.20
-            uncertainty_s = 0.70
-            res_str = f"Insufficient visual evidence to verify attribute in '{claim.text}' (uncertainty=0.70)."
+            contradict_s = 0.15
+            uncertainty_s = 0.75
+            res_str = f"Insufficient visual evidence to verify attribute in '{claim.text}' (uncertainty=0.75)."
 
         cot = (
             f"Step 1: Grounded object '{target_entity}' at bbox {bbox or 'full_frame'}. "

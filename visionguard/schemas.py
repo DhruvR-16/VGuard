@@ -166,11 +166,12 @@ class ExperimentMetrics(BaseModel):
 
 
 class HQMMetrics(BaseModel):
-    test_retest_reliability: float
-    parallel_forms_reliability: float
-    content_validity: float
-    criterion_validity: float
-    overall_quality_score: float
+    test_retest_reliability: Optional[float] = None
+    parallel_forms_reliability: Optional[float] = None
+    content_validity: Optional[float] = None
+    criterion_validity: Optional[float] = None
+    overall_quality_score: Optional[float] = None
+    details: Dict[str, Any] = Field(default_factory=dict)
 
 
 class BenchmarkQualityReport(BaseModel):

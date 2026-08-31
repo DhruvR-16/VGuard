@@ -319,15 +319,15 @@ def generate_100_images_and_claims():
             all_claims.append(claim_obj)
             splits[split_tag].append(cid)
 
-    # Save claims.jsonl
-    claims_file = os.path.join(ANN_DIR, "claims.jsonl")
-    with open(claims_file, "w", encoding="utf-8") as f:
+    # Save Synthetic Functional Benchmark
+    synth_claims_file = os.path.join(ANN_DIR, "synthetic_claims.jsonl")
+    with open(synth_claims_file, "w", encoding="utf-8") as f:
         for rec in all_claims:
             f.write(json.dumps(rec) + "\n")
 
-    # Save splits.json (Image-disjoint)
-    splits_file = os.path.join(ANN_DIR, "splits.json")
-    with open(splits_file, "w", encoding="utf-8") as f:
+    # Save synthetic_splits.json (Image-disjoint)
+    synth_splits_file = os.path.join(ANN_DIR, "synthetic_splits.json")
+    with open(synth_splits_file, "w", encoding="utf-8") as f:
         json.dump(splits, f, indent=2)
 
     # Save visionguard_claims_v0.1.jsonl
@@ -335,12 +335,8 @@ def generate_100_images_and_claims():
         for rec in all_records:
             f.write(json.dumps(rec) + "\n")
 
-    print(f"[DatasetBuilder] Generated {len(all_records)} images and {len(all_claims)} atomic claims across 10 domains.")
-    print(f"[DatasetBuilder] Split counts: Train={len(splits['train'])}, Val={len(splits['val'])}, Test={len(splits['test'])}.")
-    print(f"[DatasetBuilder] Class counts: SUPPORTED={len([c for c in all_claims if c['ground_truth']=='SUPPORTED'])}, "
-          f"CONTRADICTED={len([c for c in all_claims if c['ground_truth']=='CONTRADICTED'])}, "
-          f"INSUFFICIENT_EVIDENCE={len([c for c in all_claims if c['ground_truth']=='INSUFFICIENT_EVIDENCE'])}, "
-          f"OUT_OF_SCOPE={len([c for c in all_claims if c['ground_truth']=='OUT_OF_SCOPE'])}.")
+    print(f"[SyntheticBenchmarkBuilder] Generated {len(all_records)} synthetic geometric images and {len(all_claims)} atomic claims across 10 domains.")
+    print(f"[SyntheticBenchmarkBuilder] Split counts: Train={len(splits['train'])}, Val={len(splits['val'])}, Test={len(splits['test'])}.")
 
 
 if __name__ == "__main__":

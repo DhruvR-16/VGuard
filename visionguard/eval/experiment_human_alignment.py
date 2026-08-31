@@ -29,8 +29,8 @@ class HumanAlignmentExperiment:
         self.similarity = SimilarityBaseline(use_mock=use_mock)
 
     def run_experiment(self, dataset: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
-        # Fallback to atomic claims dataset with multi-annotator ground truth if sample dataset lacks annotator columns
-        if not dataset or "annotator_1" not in dataset[0]:
+        # Fallback to atomic claims dataset if dataset is not provided
+        if dataset is None:
             dataset = get_atomic_claims_dataset()
 
         if not dataset:
@@ -103,7 +103,7 @@ class HumanAlignmentExperiment:
         if len(consensus_labels) < 2:
             return {"status": "insufficient_samples", "num_claims_evaluated": len(consensus_labels)}
 
-        # 1. Calculate Real Inter-Annotator Agreement (Pairwise Cohen's Kappa)
+        # 1. Calculate Real Inter-Annotator Agreement (Pairwise Cohen's Kappa & Fleiss' Kappa)
         pairwise_kappas = {}
         valid_kappas = []
         for pair_name, l1, l2 in [("Annotator 1 vs 2", ann1_labels, ann2_labels),
@@ -120,6 +120,37 @@ class HumanAlignmentExperiment:
                 pairwise_kappas[pair_name] = None
 
         human_consensus_kappa = round(float(np.mean(valid_kappas)), 4) if valid_kappas else None
+
+        # Calculate Fleiss' Kappa across all 3 annotators
+        def compute_fleiss_kappa(ratings_matrix: np.ndarray) -> Optional[float]:
+            """
+            Computes Fleiss' Kappa for inter-rater agreement across multiple raters (k=3).
+            ratings_matrix shape: [N, categories_count] containing counts of raters per category.
+            """
+            N, k_cats = ratings_matrix.shape
+            n_raters = np.sum(ratings_matrix[0])
+            if N == 0 or n_raters <= 1:
+                return None
+
+            p_j = np.sum(ratings_matrix, axis=0) / (N * n_raters)
+            p_e = np.sum(p_j ** 2)
+
+            P_i = (np.sum(ratings_matrix ** 2, axis=1) - n_raters) / (n_raters * (n_raters - 1))
+            P_bar = np.mean(P_i)
+
+            if p_e >= 1.0:
+                return 1.0
+            kappa = (P_bar - p_e) / (1.0 - p_e)
+            return round(float(kappa), 4) if not np.isnan(kappa) else None
+
+        # Build binary rating matrix (Supported vs Non-Supported)
+        n_samples = len(ann1_labels)
+        mat_binary = np.zeros((n_samples, 2), dtype=int)
+        for i in range(n_samples):
+            for a_val in [ann1_labels[i], ann2_labels[i], ann3_labels[i]]:
+                mat_binary[i, a_val] += 1
+
+        fleiss_k = compute_fleiss_kappa(mat_binary)
 
         # 2. Calculate System-Human Alignment
         def compute_alignment(y_true, y_pred_labels, y_pred_scores):
@@ -149,10 +180,11 @@ class HumanAlignmentExperiment:
         return {
             "num_claims_evaluated": len(consensus_labels),
             "inter_annotator_agreement": {
-                "metric": "Pairwise Cohen's Kappa (κ)",
+                "metric": "Pairwise Cohen's Kappa (κ) & Fleiss' Kappa",
                 "human_human_consensus": human_consensus_kappa,
+                "fleiss_kappa": fleiss_k,
                 "pairwise_kappas": pairwise_kappas,
-                "interpretation": "Substantial human consensus across dataset annotations." if (human_consensus_kappa is not None and human_consensus_kappa >= 0.70) else "Moderate agreement."
+                "interpretation": "Substantial human consensus across independent dataset annotations." if (human_consensus_kappa is not None and human_consensus_kappa >= 0.70) else "Moderate agreement."
             },
             "system_human_alignment": {
                 "CAM-V (Ours) vs Human": {

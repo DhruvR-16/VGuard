@@ -124,12 +124,13 @@ class CAMVOrchestrator:
             )
 
         # Step 5: Route to Specialized Verifiers, Collect Directional Evidence, Fuse & Assign Verdict
+        image_path = image_input if isinstance(image_input, str) else None
         verification_results: List[ClaimVerificationResult] = []
         verdict_counts = {v.value: 0 for v in Verdict}
         support_scores = []
 
         for claim in classified_claims:
-            evidences = self.router.route_and_verify(claim, visual_features=visual_features)
+            evidences = self.router.route_and_verify(claim, image_path=image_path, visual_features=visual_features)
             supp, cont, unc, math_obj = self.fusion_engine.fuse_directional(claim, evidences)
             support_scores.append(supp)
 
@@ -174,6 +175,7 @@ class CAMVOrchestrator:
                 original_response=response_text,
                 verification_results=verification_results,
                 dependency_graph=dependency_graph,
+                image_path=image_path,
                 visual_features=visual_features
             )
 

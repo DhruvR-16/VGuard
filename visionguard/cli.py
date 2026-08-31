@@ -51,15 +51,18 @@ def main():
         choices=["benchmark", "ablation", "robustness", "human_alignment", "guardrail", "claim_classification", "all"],
         help="Experiment to execute"
     )
+    eval_parser.add_argument("--benchmark", type=str, default="real", choices=["real", "synthetic"], help="Benchmark dataset type")
     eval_parser.add_argument("--split", type=str, default=None, choices=["train", "val", "test"], help="Dataset split")
     eval_parser.add_argument("--mock", action="store_true", help="Run with mock models")
 
     # 5. Ablation Subcommand
     ablation_parser = subparsers.add_parser("ablation", help="Run Section 14 ablation experiments")
+    ablation_parser.add_argument("--benchmark", type=str, default="real", choices=["real", "synthetic"], help="Benchmark dataset type")
     ablation_parser.add_argument("--mock", action="store_true", help="Run with mock models")
 
     # 6. Experiments Subcommand
     exp_parser = subparsers.add_parser("experiments", help="Run all 6 evaluation experiments")
+    exp_parser.add_argument("--benchmark", type=str, default="real", choices=["real", "synthetic"], help="Benchmark dataset type")
     exp_parser.add_argument("--mock", action="store_true", help="Run with mock models")
 
     # 7. Adversarial Subcommand
@@ -98,7 +101,7 @@ def main():
             print("Status: Ungrounded (No image was provided for visual verification and repair).")
 
     elif args.command == "eval":
-        dataset = get_atomic_claims_dataset(args.split) or get_sample_dataset()
+        dataset = get_atomic_claims_dataset(args.split, benchmark_type=args.benchmark) or get_sample_dataset(benchmark_type=args.benchmark)
         exp = args.experiment
 
         if exp == "benchmark":
@@ -114,7 +117,7 @@ def main():
             print(json.dumps(results, indent=2))
 
         elif exp == "robustness":
-            results = RobustnessExperiment(use_mock=args.mock).run_experiment(get_sample_dataset())
+            results = RobustnessExperiment(use_mock=args.mock).run_experiment(get_sample_dataset(benchmark_type=args.benchmark))
             print("\n=== VisionGuard Robustness & Stability Results ===")
             print(json.dumps(results, indent=2))
 
@@ -124,29 +127,31 @@ def main():
             print(json.dumps(results, indent=2))
 
         elif exp == "guardrail":
-            results = GuardrailEffectivenessExperiment(use_mock=args.mock).run_experiment(get_sample_dataset())
+            results = GuardrailEffectivenessExperiment(use_mock=args.mock).run_experiment(get_sample_dataset(benchmark_type=args.benchmark))
             print("\n=== VisionGuard Response Repair Guardrail Results ===")
             print(json.dumps(results, indent=2))
 
         elif exp == "claim_classification":
-            results = ClaimClassificationExperiment(use_mock=args.mock).run_experiment(get_sample_dataset())
+            results = ClaimClassificationExperiment(use_mock=args.mock).run_experiment(dataset)
             print("\n=== VisionGuard Claim Classification Experiment Results ===")
             print(json.dumps(results, indent=2))
 
         elif exp == "all":
             bm = BenchmarkRunner(use_mock=args.mock).run_benchmark(dataset)
             ab = AblationStudyRunner(use_mock=args.mock).run_ablation(dataset)
-            rob = RobustnessExperiment(use_mock=args.mock).run_experiment(get_sample_dataset())
+            rob = RobustnessExperiment(use_mock=args.mock).run_experiment(get_sample_dataset(benchmark_type=args.benchmark))
             ha = HumanAlignmentExperiment(use_mock=args.mock).run_experiment(dataset)
-            gr = GuardrailEffectivenessExperiment(use_mock=args.mock).run_experiment(get_sample_dataset())
+            gr = GuardrailEffectivenessExperiment(use_mock=args.mock).run_experiment(get_sample_dataset(benchmark_type=args.benchmark))
+            cc = ClaimClassificationExperiment(use_mock=args.mock).run_experiment(dataset)
 
-            print("\n=== VisionGuard Complete 5-Experiment Suite Results ===")
+            print("\n=== VisionGuard Complete 6-Experiment Suite Results ===")
             print(json.dumps({
-                "benchmark": bm,
-                "ablation": ab,
-                "robustness": rob,
-                "human_alignment": ha,
-                "guardrail": gr
+                "exp1_claim_classification": cc,
+                "exp2_benchmark": bm,
+                "exp3_ablation": ab,
+                "exp4_robustness": rob,
+                "exp5_human_alignment": ha,
+                "exp6_guardrail": gr
             }, indent=2))
 
     elif args.command == "ablation":

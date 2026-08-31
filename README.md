@@ -64,7 +64,8 @@ Unlike conventional evaluation approaches that treat generated multimodal text a
 - ⚖️ **Directional Evidence & 4-State Uncertainty Engine**: Measures independent support, contradiction, and uncertainty dimensions to produce calibrated verdicts: `SUPPORTED`, `CONTRADICTED`, `INSUFFICIENT_EVIDENCE`, and `OUT_OF_SCOPE`.
 - 🛠️ **Closed-Loop Constrained Response Repair**: Automatically isolates and prunes contradicted assertions, reconstructs grammatically coherent grounded text, and validates factual consistency via an immediate re-verification pass.
 - ⚡ **7-Operator Adversarial Hallucination Engine**: Systematically synthesizes controlled adversarial perturbations (Object Swap, Attribute Swap, Count Mismatch, Spatial Relation Inversion, Negation Swap, Entity Swap, OCR Distortion) for robustness stress testing.
-- 📊 **HQM Psychometric Evaluation & 6 Benchmark Suites**: Evaluated against test-retest reliability ($r > 0.95$), parallel-forms reliability ($\rho > 0.90$), content validity, criterion validity, baseline comparisons against 4 architectures, and Section 14 ablations (A0–A5).
+- 📊 **HQM Psychometric Evaluation Framework**: Comprehensive psychometric reliability and validity suite (test-retest reliability, parallel-forms reliability, content validity screening ratio, criterion validity correlation, baseline comparisons, and Section 14 ablations A0–A5).
+- 🖼️ **Dual Benchmark Suite**: Features a **Photographic Benchmark** (100 photographic scenes, 500 atomic claims, 3 independent human annotator ratings) and a **Synthetic Functional Benchmark** for component regression testing.
 - 🚀 **Production-Ready Stack**: Includes a high-throughput FastAPI REST backend (10 endpoints), an executive dark-mode Web Dashboard UI, and a unified CLI.
 
 ---
@@ -327,12 +328,14 @@ VGuard provides 6 automated, reproducible experiment runners:
 
 ## 🧠 HQM Psychometric Reliability & Validity
 
-VGuard integrates the Hallucination Quality Measurement (HQM) framework (*Yan et al., arXiv:2406.17115v3*):
+VGuard integrates the psychometric evaluation methodology from the Hallucination Quality Measurement (HQM) framework (*Yan et al., arXiv:2406.17115v3*):
 
-- **Test-Retest Reliability ($r > 0.95$)**: Measures evaluation consistency across repeated inference passes.
-- **Parallel-Forms Reliability ($\rho > 0.90$)**: Evaluates score stability under semantic paraphrasing.
-- **Content Validity ($N_{\text{valid}} / N > 95\%$)**: Guarantees unambiguous image-claim correspondence.
-- **Criterion Validity ($r_{\text{human}} > 0.90$)**: Empirically validates correlation against human expert judgments.
+- **Test-Retest Reliability ($r$)**: Measures score consistency across repeated inference passes on identical image-claim inputs.
+- **Parallel-Forms Reliability ($\rho$)**: Evaluates evaluation stability under syntactic and semantic paraphrasing of assertions.
+- **Content Validity Screening Ratio ($N_{\text{valid}} / N$)**: Measures the proportion of benchmark samples satisfying unambiguous image-claim correspondence.
+- **Criterion Validity ($r_{\text{human}}$)**: Quantifies correlation between automated CAM-V verification scores and independent human expert judgments.
+
+Benchmarks can be dynamically evaluated using `vguard hqm-eval` or through the `/api/hqm` endpoint.
 
 ---
 

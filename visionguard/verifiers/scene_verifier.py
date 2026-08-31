@@ -58,8 +58,8 @@ class SceneVerifier:
         image_obj = visual_features.get("image_obj") if visual_features else None
         target_image = image_obj or image_path
 
-        scene_type = "general scene"
-        is_outdoor = True
+        scene_type = "unclassified scene"
+        is_outdoor = None
         clip_ran = False
 
         if target_image is not None and not self.use_mock:
@@ -77,18 +77,28 @@ class SceneVerifier:
             if probs:
                 top_scene = max(probs.items(), key=lambda x: x[1])[0]
                 scene_type = top_scene
-                is_outdoor = "outdoor" in top_scene or "street" in top_scene or "landscape" in top_scene or "nature" in top_scene
+                is_outdoor = "outdoor" in top_scene or "street" in top_scene or "landscape" in top_scene or "sports" in top_scene
                 clip_ran = True
 
         if not clip_ran and visual_features is not None:
             scene_info = visual_features.get("scene", {})
-            is_outdoor = scene_info.get("is_outdoor", False) if isinstance(scene_info, dict) else False
-            scene_type = scene_info.get("type", "scene background") if isinstance(scene_info, dict) else str(scene_info)
+            if isinstance(scene_info, dict):
+                is_outdoor = scene_info.get("is_outdoor")
+                scene_type = scene_info.get("type", "scene background")
+            elif isinstance(scene_info, str):
+                scene_type = scene_info
+                is_outdoor = "outdoor" in scene_info.lower()
 
         outdoor_indicators = ["outdoor", "park", "nature", "field", "yard", "snow", "road", "street", "beach", "sky", "forest", "mountain", "cliff", "ocean", "landscape"]
         indoor_indicators = ["indoor", "room", "kitchen", "office", "desk", "bedroom", "living room", "concert hall", "coffee bar", "library", "gallery"]
 
-        if any(w in claim_text for w in outdoor_indicators):
+        if is_outdoor is None:
+            # Ungrounded scene context
+            support_s = 0.20
+            contradict_s = 0.10
+            uncertainty_s = 0.70
+            rationale = f"Insufficient visual context to verify scene assertion in '{claim.text}'."
+        elif any(w in claim_text for w in outdoor_indicators):
             if is_outdoor:
                 support_s = 0.92
                 contradict_s = 0.05

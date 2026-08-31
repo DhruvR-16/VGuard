@@ -9,23 +9,28 @@ import json
 from typing import List, Dict, Any, Optional
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DATA_FILE = os.path.join(BASE_DIR, "data", "visionguard_claims_v0.1.jsonl")
-CLAIMS_FILE = os.path.join(BASE_DIR, "data", "annotations", "claims.jsonl")
-SPLITS_FILE = os.path.join(BASE_DIR, "data", "annotations", "splits.json")
+REAL_DATA_FILE = os.path.join(BASE_DIR, "data", "visionguard_claims_real_v0.2.jsonl")
+SYNTHETIC_DATA_FILE = os.path.join(BASE_DIR, "data", "visionguard_claims_v0.1.jsonl")
+REAL_CLAIMS_FILE = os.path.join(BASE_DIR, "data", "annotations", "claims_real.jsonl")
+SYNTHETIC_CLAIMS_FILE = os.path.join(BASE_DIR, "data", "annotations", "synthetic_claims.jsonl")
+ACTIVE_CLAIMS_FILE = os.path.join(BASE_DIR, "data", "annotations", "claims.jsonl")
+ACTIVE_SPLITS_FILE = os.path.join(BASE_DIR, "data", "annotations", "splits.json")
+SYNTHETIC_SPLITS_FILE = os.path.join(BASE_DIR, "data", "annotations", "synthetic_splits.json")
 
 
-def get_sample_dataset() -> List[Dict[str, Any]]:
+def get_sample_dataset(benchmark_type: str = "real") -> List[Dict[str, Any]]:
     """
     Loads the image-backed VisionGuard-Claims benchmark dataset.
+    Supports benchmark_type='real' (Photographic Benchmark) or 'synthetic' (Functional Test Suite).
     """
-    if os.path.exists(DATA_FILE):
+    target_file = REAL_DATA_FILE if benchmark_type == "real" and os.path.exists(REAL_DATA_FILE) else SYNTHETIC_DATA_FILE
+    if os.path.exists(target_file):
         dataset = []
-        with open(DATA_FILE, "r", encoding="utf-8") as f:
+        with open(target_file, "r", encoding="utf-8") as f:
             for line in f:
                 if line.strip():
                     item = json.loads(line.strip())
                     if "image_path" in item:
-                        # Ensure absolute path or relative to project root
                         full_img_path = os.path.join(BASE_DIR, item["image_path"])
                         if os.path.exists(full_img_path):
                             item["full_image_path"] = full_img_path
@@ -35,22 +40,30 @@ def get_sample_dataset() -> List[Dict[str, Any]]:
     return []
 
 
-def get_atomic_claims_dataset(split: Optional[str] = None) -> List[Dict[str, Any]]:
+def get_atomic_claims_dataset(split: Optional[str] = None, benchmark_type: str = "real") -> List[Dict[str, Any]]:
     """
     Loads independent atomic claim annotations with multi-annotator ground truth.
+    Supports benchmark_type='real' (Photographic Benchmark) or 'synthetic' (Functional Test Suite).
     Optionally filters by split ('train', 'val', 'test').
     """
-    if not os.path.exists(CLAIMS_FILE):
+    target_claims = ACTIVE_CLAIMS_FILE if os.path.exists(ACTIVE_CLAIMS_FILE) else REAL_CLAIMS_FILE
+    target_splits = ACTIVE_SPLITS_FILE
+
+    if benchmark_type == "synthetic" and os.path.exists(SYNTHETIC_CLAIMS_FILE):
+        target_claims = SYNTHETIC_CLAIMS_FILE
+        target_splits = SYNTHETIC_SPLITS_FILE
+
+    if not os.path.exists(target_claims):
         return []
 
     split_ids = None
-    if split and os.path.exists(SPLITS_FILE):
-        with open(SPLITS_FILE, "r", encoding="utf-8") as f:
+    if split and os.path.exists(target_splits):
+        with open(target_splits, "r", encoding="utf-8") as f:
             splits_data = json.load(f)
             split_ids = set(splits_data.get(split, []))
 
     claims = []
-    with open(CLAIMS_FILE, "r", encoding="utf-8") as f:
+    with open(target_claims, "r", encoding="utf-8") as f:
         for line in f:
             if line.strip():
                 item = json.loads(line.strip())
@@ -65,12 +78,13 @@ def get_atomic_claims_dataset(split: Optional[str] = None) -> List[Dict[str, Any
     return claims
 
 
-def get_dataset_splits() -> Dict[str, List[str]]:
+def get_dataset_splits(benchmark_type: str = "real") -> Dict[str, List[str]]:
     """
-    Returns train / val / test claim IDs.
+    Returns train / val / test claim IDs for the requested benchmark.
     """
-    if os.path.exists(SPLITS_FILE):
-        with open(SPLITS_FILE, "r", encoding="utf-8") as f:
+    target_splits = SYNTHETIC_SPLITS_FILE if benchmark_type == "synthetic" and os.path.exists(SYNTHETIC_SPLITS_FILE) else ACTIVE_SPLITS_FILE
+    if os.path.exists(target_splits):
+        with open(target_splits, "r", encoding="utf-8") as f:
             return json.load(f)
     return {"train": [], "val": [], "test": []}
 

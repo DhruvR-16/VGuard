@@ -25,6 +25,7 @@ class AblationStudyRunner:
     def __init__(self, use_mock: bool = False):
         self.use_mock = use_mock
         self.a0_full = CAMVOrchestrator(fusion_mode="claim_aware", use_mock=use_mock)
+        self.a0_learned = CAMVOrchestrator(fusion_mode="learned", use_mock=use_mock)
         self.a1_uniform = CAMVOrchestrator(fusion_mode="uniform", use_mock=use_mock)
         self.a2_single = CAMVOrchestrator(fusion_mode="single", use_mock=use_mock)
         self.a5_monolithic = WholeResponseVLMJudge(use_mock=use_mock)
@@ -35,6 +36,7 @@ class AblationStudyRunner:
 
         ground_truths = []
         preds_a0 = []
+        preds_a0_learned = []
         preds_a1 = []
         preds_a2 = []
         preds_a3 = []
@@ -56,13 +58,21 @@ class AblationStudyRunner:
             image_path = sample.get("full_image_path") or sample.get("image_path")
             visual_features = sample.get("visual_features")
 
-            # A0: Full CAM-V (Claim-Aware, 4-state uncertainty, decomposition)
+            # A0: Full CAM-V (Claim-Aware Directional Fusion, 4-state uncertainty, decomposition)
             res_a0 = self.a0_full.analyze(
                 response_text=resp,
                 image_input=image_path,
                 visual_features=visual_features
             )
             preds_a0.append(1 if res_a0.overall_verdict == Verdict.SUPPORTED else 0)
+
+            # A0-Learned: Learned ML Evidence Fusion (Logistic Regression on Multi-Verifier Vectors)
+            res_a0_learned = self.a0_learned.analyze(
+                response_text=resp,
+                image_input=image_path,
+                visual_features=visual_features
+            )
+            preds_a0_learned.append(1 if res_a0_learned.overall_verdict == Verdict.SUPPORTED else 0)
 
             # A1: w/o Claim-aware Routing (Uniform fusion across verifiers)
             res_a1 = self.a1_uniform.analyze(
@@ -124,6 +134,7 @@ class AblationStudyRunner:
             return round(float(p), 4), round(float(r), 4), round(float(f1), 4)
 
         p0, r0, f1_0 = eval_config(preds_a0)
+        p0_l, r0_l, f1_0_l = eval_config(preds_a0_learned)
         p1, r1, f1_1 = eval_config(preds_a1)
         p2, r2, f1_2 = eval_config(preds_a2)
         p3, r3, f1_3 = eval_config(preds_a3)
@@ -132,7 +143,8 @@ class AblationStudyRunner:
 
         base_f1 = max(0.001, f1_0)
         configurations = [
-            {"name": "A0: Full CAM-V (Ours)", "precision": p0, "recall": r0, "f1": f1_0, "delta_f1": "+0.0%"},
+            {"name": "A0: Full CAM-V Directional (Ours)", "precision": p0, "recall": r0, "f1": f1_0, "delta_f1": "+0.0%"},
+            {"name": "A0-Learned: Learned ML Fusion", "precision": p0_l, "recall": r0_l, "f1": f1_0_l, "delta_f1": f"{((f1_0_l - base_f1)/base_f1)*100:+.1f}%"},
             {"name": "A1: w/o Claim Routing (Uniform Fusion)", "precision": p1, "recall": r1, "f1": f1_1, "delta_f1": f"{((f1_1 - base_f1)/base_f1)*100:+.1f}%"},
             {"name": "A2: w/o Multi-Evidence Fusion (Single Verifier)", "precision": p2, "recall": r2, "f1": f1_2, "delta_f1": f"{((f1_2 - base_f1)/base_f1)*100:+.1f}%"},
             {"name": "A3: w/o Uncertainty Modeling (Binary Forced)", "precision": p3, "recall": r3, "f1": f1_3, "delta_f1": f"{((f1_3 - base_f1)/base_f1)*100:+.1f}%"},

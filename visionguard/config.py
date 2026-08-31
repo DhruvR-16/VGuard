@@ -13,6 +13,7 @@ import torch
 # System Execution Mode
 VISIONGUARD_MODE = os.getenv("VISIONGUARD_MODE", "production").lower()  # 'production', 'development', 'test'
 VISIONGUARD_DEVICE = os.getenv("VISIONGUARD_DEVICE", "auto").lower()
+STRICT_REAL = os.getenv("VISIONGUARD_STRICT_REAL", "False").lower() in ("true", "1")
 
 # Confidence & Decision Thresholds
 SUPPORT_THRESHOLD = float(os.getenv("VISIONGUARD_SUPPORT_THRESHOLD", "0.65"))

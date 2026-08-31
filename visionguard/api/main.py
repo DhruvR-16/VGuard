@@ -41,15 +41,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Instantiate pipeline components
-orchestrator = CAMVOrchestrator(use_mock=False)
-benchmark_runner = BenchmarkRunner(use_mock=False)
-ablation_runner = AblationStudyRunner(use_mock=False)
+from visionguard.config import VISIONGUARD_MODE
+
+# Instantiate pipeline components (use mock when in test mode for instant API responses)
+is_test = VISIONGUARD_MODE == "test"
+orchestrator = CAMVOrchestrator(use_mock=is_test)
+benchmark_runner = BenchmarkRunner(use_mock=is_test)
+ablation_runner = AblationStudyRunner(use_mock=is_test)
 adversarial_gen = AdversarialHallucinationGenerator()
-claim_class_exp = ClaimClassificationExperiment(use_mock=False)
-robustness_exp = RobustnessExperiment(use_mock=False)
-human_align_exp = HumanAlignmentExperiment(use_mock=False)
-guardrail_exp = GuardrailEffectivenessExperiment(use_mock=False)
+claim_class_exp = ClaimClassificationExperiment(use_mock=is_test)
+robustness_exp = RobustnessExperiment(use_mock=is_test)
+human_align_exp = HumanAlignmentExperiment(use_mock=is_test)
+guardrail_exp = GuardrailEffectivenessExperiment(use_mock=is_test)
 
 
 class AnalyzeRequest(BaseModel):
@@ -158,11 +161,14 @@ def generate_adversarial_suite(req: AdversarialRequest):
 
 
 @app.get("/api/experiments/run")
-def run_all_experiments():
+def run_all_experiments(sample_limit: Optional[int] = None):
     """
     Runs all 6 core evaluation experiments over the benchmark dataset.
+    Optional sample_limit enables rapid testing and validation runs.
     """
     samples = get_sample_dataset()
+    if sample_limit is not None and sample_limit > 0:
+        samples = samples[:sample_limit]
     return {
         "experiment_1_claim_classification": claim_class_exp.run_experiment(samples),
         "experiment_2_baseline_comparison": benchmark_runner.run_benchmark(samples),
@@ -184,14 +190,18 @@ def get_hqm_quality():
 
 
 @app.get("/api/benchmark/run")
-def run_benchmark_evaluation():
+def run_benchmark_evaluation(sample_limit: Optional[int] = None):
     samples = get_sample_dataset()
+    if sample_limit is not None and sample_limit > 0:
+        samples = samples[:sample_limit]
     return benchmark_runner.run_benchmark(samples)
 
 
 @app.get("/api/ablation/run")
-def run_ablation_experiment():
+def run_ablation_experiment(sample_limit: Optional[int] = None):
     samples = get_sample_dataset()
+    if sample_limit is not None and sample_limit > 0:
+        samples = samples[:sample_limit]
     return ablation_runner.run_ablation(samples)
 
 

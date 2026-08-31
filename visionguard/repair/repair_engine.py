@@ -35,6 +35,7 @@ class ResponseRepairEngine:
         original_response: str,
         verification_results: List[ClaimVerificationResult],
         dependency_graph: Optional[ClaimDependencyGraph] = None,
+        image_path: Optional[str] = None,
         visual_features: Optional[Dict[str, Any]] = None
     ) -> RepairedResponse:
         """
@@ -91,7 +92,7 @@ class ResponseRepairEngine:
         re_scores = []
 
         for claim in re_extracted_claims:
-            evidences = self.router.route_and_verify(claim, visual_features=visual_features)
+            evidences = self.router.route_and_verify(claim, image_path=image_path, visual_features=visual_features)
             supp, cont, unc, math_obj = self.fusion.fuse_directional(claim, evidences)
             verdict, explanation = self.uncertainty.determine_verdict(claim, supp, cont, unc)
             re_scores.append(supp)

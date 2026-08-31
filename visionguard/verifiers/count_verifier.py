@@ -53,7 +53,7 @@ class CountVerifier:
 
         # 2. Run open-vocabulary grounding detection across raw image or visual features
         raw_detections = []
-        target_image = image_path or (visual_features.get("image_path") if visual_features else None)
+        target_image = image_path or (visual_features.get("image_obj") if visual_features else None) or (visual_features.get("image_path") if visual_features else None)
 
         if target_image and not self.use_mock:
             # Query detector with singular and plural variants

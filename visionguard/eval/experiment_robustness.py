@@ -25,37 +25,133 @@ class RobustnessExperiment:
 
     def run_experiment(self, sample_dataset: List[Dict[str, Any]] = None) -> Dict[str, Any]:
         def resolve_img(rel):
+            if not rel:
+                return None
+            if os.path.isabs(rel) and os.path.exists(rel):
+                return rel
+            p_real = os.path.join(BASE_DIR, "data", "images_real", os.path.basename(rel))
+            if os.path.exists(p_real):
+                return p_real
             p = os.path.join(BASE_DIR, rel)
             return p if os.path.exists(p) else rel
 
-        # 1. Prompt Paraphrase Stability Testbed (Raw Images)
-        paraphrase_testbed = [
-            (
-                "A young boy wearing a red shirt is riding a bicycle near a park.",
-                "A boy dressed in a red shirt rides a bicycle beside a park.",
-                resolve_img("data/images/000001.jpg")
-            ),
-            (
-                "A brown dog is sitting beside a red bicycle.",
-                "Beside a red bicycle, a brown dog is sitting.",
-                resolve_img("data/images/000002.jpg")
-            ),
-            (
-                "A blue car is parked on the snowy road.",
-                "On the snowy road, a blue car is parked.",
-                resolve_img("data/images/000003.jpg")
-            ),
-            (
-                "A cup is on top of the desk beside a laptop.",
-                "Next to a laptop on the desk sits a cup.",
-                resolve_img("data/images/000009.jpg")
-            ),
-            (
-                "An espresso tamper is resting on the marble counter next to a grinder.",
-                "Next to a grinder on the marble counter rests an espresso tamper.",
-                resolve_img("data/images/000012.jpg")
-            )
-        ]
+        # Dynamic construction from provided dataset samples if available
+        if sample_dataset and len(sample_dataset) >= 5:
+            paraphrase_testbed = []
+            order_testbed = []
+            negation_testbed = []
+
+            for s in sample_dataset[:10]:
+                txt = s.get("claim") or s.get("response_text") or ""
+                img = s.get("full_image_path") or s.get("image_path")
+                if not txt or not img:
+                    continue
+                # Paraphrase: active/passive or descriptive prefix
+                para_txt = f"Indeed, {txt[0].lower() + txt[1:]}" if len(txt) > 2 else txt
+                paraphrase_testbed.append((txt, para_txt, resolve_img(img)))
+
+                # Order: if multi-word or compound
+                words = txt.split()
+                if len(words) >= 4:
+                    order_txt = f"{' '.join(words[2:])}, {' '.join(words[:2])}"
+                else:
+                    order_txt = txt
+                order_testbed.append((txt, order_txt, resolve_img(img)))
+
+                # Negation
+                neg_txt = f"There is no {txt.lower()}" if not txt.lower().startswith("there") else f"It is false that {txt}"
+                negation_testbed.append((txt, neg_txt, resolve_img(img)))
+
+            if len(paraphrase_testbed) < 3:
+                paraphrase_testbed = None
+        else:
+            paraphrase_testbed = None
+
+        if not paraphrase_testbed:
+            # Standard Curated Photographic Testbed
+            paraphrase_testbed = [
+                (
+                    "A yellow car is visible on the street.",
+                    "On the city street, a yellow car is visible.",
+                    resolve_img("data/images_real/real_000001.jpg") or resolve_img("data/images/000001.jpg")
+                ),
+                (
+                    "A brown dog is present on the grass.",
+                    "Present on the green grass is a brown dog.",
+                    resolve_img("data/images_real/real_000002.jpg") or resolve_img("data/images/000002.jpg")
+                ),
+                (
+                    "A white mug is resting on the desk.",
+                    "Resting on top of the desk is a white mug.",
+                    resolve_img("data/images_real/real_000003.jpg") or resolve_img("data/images/000003.jpg")
+                ),
+                (
+                    "A bowl containing fruit is on the table.",
+                    "On the dining table sits a bowl containing fruit.",
+                    resolve_img("data/images_real/real_000004.jpg") or resolve_img("data/images/000009.jpg")
+                ),
+                (
+                    "A soccer player in a blue jersey is on the pitch.",
+                    "On the soccer pitch is an athlete wearing a blue jersey.",
+                    resolve_img("data/images_real/real_000005.jpg") or resolve_img("data/images/000010.jpg")
+                )
+            ]
+
+            order_testbed = [
+                (
+                    "A yellow car and commercial buildings.",
+                    "Commercial buildings and a yellow car.",
+                    resolve_img("data/images_real/real_000001.jpg") or resolve_img("data/images/000001.jpg")
+                ),
+                (
+                    "A brown dog and a wooden bowl.",
+                    "A wooden bowl and a brown dog.",
+                    resolve_img("data/images_real/real_000002.jpg") or resolve_img("data/images/000002.jpg")
+                ),
+                (
+                    "A laptop and a white coffee mug.",
+                    "A white coffee mug and a laptop.",
+                    resolve_img("data/images_real/real_000003.jpg") or resolve_img("data/images/000003.jpg")
+                ),
+                (
+                    "Fresh apples and yellow bananas.",
+                    "Yellow bananas and fresh apples.",
+                    resolve_img("data/images_real/real_000004.jpg") or resolve_img("data/images/000017.jpg")
+                ),
+                (
+                    "A blue van and a red truck.",
+                    "A red truck and a blue van.",
+                    resolve_img("data/images_real/real_000008.jpg") or resolve_img("data/images/000012.jpg")
+                )
+            ]
+
+            negation_testbed = [
+                (
+                    "A yellow car is visible on the street.",
+                    "There are no cars visible on the street.",
+                    resolve_img("data/images_real/real_000001.jpg") or resolve_img("data/images/000001.jpg")
+                ),
+                (
+                    "A brown dog is present on the grass.",
+                    "There are no dogs present on the grass.",
+                    resolve_img("data/images_real/real_000002.jpg") or resolve_img("data/images/000002.jpg")
+                ),
+                (
+                    "A white mug is resting on the desk.",
+                    "There is no mug resting on the desk.",
+                    resolve_img("data/images_real/real_000003.jpg") or resolve_img("data/images/000003.jpg")
+                ),
+                (
+                    "A bowl containing fruit is on the table.",
+                    "There is no bowl or fruit on the table.",
+                    resolve_img("data/images_real/real_000004.jpg") or resolve_img("data/images/000009.jpg")
+                ),
+                (
+                    "A blue van and a red truck are on the road.",
+                    "There are no vehicles on the road.",
+                    resolve_img("data/images_real/real_000008.jpg") or resolve_img("data/images/000014.jpg")
+                )
+            ]
 
         deltas = []
         para_verdict_matches = 0
@@ -74,35 +170,7 @@ class RobustnessExperiment:
         stability_score = round(float(1.0 - avg_delta), 4)
         para_verdict_invariance = round(float(para_verdict_matches / len(paraphrase_testbed)), 4)
 
-        # 2. Dynamic Order Invariance Evaluation (Raw Images)
-        order_testbed = [
-            (
-                "A dog and a bicycle.",
-                "A bicycle and a dog.",
-                resolve_img("data/images/000002.jpg")
-            ),
-            (
-                "A red apple and a yellow banana.",
-                "A yellow banana and a red apple.",
-                resolve_img("data/images/000017.jpg")
-            ),
-            (
-                "A cup and a laptop.",
-                "A laptop and a cup.",
-                resolve_img("data/images/000009.jpg")
-            ),
-            (
-                "A violinist and a cello.",
-                "A cello and a violinist.",
-                resolve_img("data/images/000010.jpg")
-            ),
-            (
-                "A tamper and a grinder.",
-                "A grinder and a tamper.",
-                resolve_img("data/images/000012.jpg")
-            )
-        ]
-
+        # 2. Dynamic Order Invariance Evaluation
         order_matches = 0
         order_deltas = []
         for s1, s2, img_path in order_testbed:
@@ -115,35 +183,7 @@ class RobustnessExperiment:
         order_invariance_rate = round(float(order_matches / len(order_testbed)), 4)
         order_score = round(float(1.0 - np.mean(order_deltas)), 4)
 
-        # 3. Dynamic Negation Sensitivity Evaluation (Raw Images)
-        negation_testbed = [
-            (
-                "A car is present on the road.",
-                "There are no cars on the road.",
-                resolve_img("data/images/000003.jpg")
-            ),
-            (
-                "A dog is present in the yard.",
-                "There are no dogs in the yard.",
-                resolve_img("data/images/000002.jpg")
-            ),
-            (
-                "There are cars on the empty road.",
-                "There are no cars on the empty road.",
-                resolve_img("data/images/000006.jpg")
-            ),
-            (
-                "A cup is on the desk.",
-                "There is no cup on the desk.",
-                resolve_img("data/images/000009.jpg")
-            ),
-            (
-                "A helicopter is in the sky.",
-                "There is no helicopter in the sky.",
-                resolve_img("data/images/000014.jpg")
-            )
-        ]
-
+        # 3. Dynamic Negation Sensitivity Evaluation
         negation_flips = 0
         for pos_stmt, neg_stmt, img_path in negation_testbed:
             r_pos = self.orchestrator.analyze(pos_stmt, image_input=img_path)

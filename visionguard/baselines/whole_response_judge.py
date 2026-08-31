@@ -20,6 +20,21 @@ class WholeResponseVLMJudge:
         self.use_mock = use_mock
         self.registry = registry
 
+    def _load_image(self, image_input: Optional[Union[str, bytes, Image.Image]]) -> Optional[Image.Image]:
+        if image_input is None:
+            return None
+        if isinstance(image_input, Image.Image):
+            return image_input.convert("RGB")
+        try:
+            if isinstance(image_input, bytes):
+                import io
+                return Image.open(io.BytesIO(image_input)).convert("RGB")
+            if isinstance(image_input, str) and os.path.exists(image_input):
+                return Image.open(image_input).convert("RGB")
+        except Exception:
+            return None
+        return None
+
     def evaluate(
         self,
         response_text: str,
@@ -32,8 +47,8 @@ class WholeResponseVLMJudge:
         image_obj: Optional[Image.Image] = None
         if visual_features and "image_obj" in visual_features:
             image_obj = visual_features["image_obj"]
-        elif isinstance(image_input, Image.Image):
-            image_obj = image_input
+        elif image_input is not None:
+            image_obj = self._load_image(image_input)
 
         confidence = 0.50
 

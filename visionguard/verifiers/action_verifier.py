@@ -40,6 +40,11 @@ class ActionInteractionVerifier:
             )
 
         image_obj: Optional[Image.Image] = visual_features.get("image_obj") if visual_features else None
+        if image_obj is None and image_path and os.path.exists(image_path):
+            try:
+                image_obj = Image.open(image_path).convert("RGB")
+            except Exception:
+                image_obj = None
 
         # 1. Formulate targeted VQA Question from Linguistic Structure
         question = self._formulate_vqa_question(claim)

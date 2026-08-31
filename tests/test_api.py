@@ -2,6 +2,8 @@
 Integration tests for FastAPI endpoints in VisionGuard.
 """
 
+import os
+os.environ["VISIONGUARD_MODE"] = "test"
 import pytest
 from fastapi.testclient import TestClient
 from visionguard.api.main import app
@@ -55,7 +57,7 @@ def test_adversarial_endpoint():
 
 
 def test_experiments_endpoint():
-    response = client.get("/api/experiments/run")
+    response = client.get("/api/experiments/run?sample_limit=2")
     assert response.status_code == 200
     data = response.json()
     assert "experiment_1_claim_classification" in data

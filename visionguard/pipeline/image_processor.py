@@ -57,10 +57,22 @@ class AutomatedImageProcessor:
         color_dist = self._analyze_color_distribution(img_np)
         dominant_color = max(color_dist.items(), key=lambda x: x[1])[0]
 
-        # 4. Scene heuristics from color & brightness distribution
+        # 4. Scene Context Classification (CLIP zero-shot or ungrounded)
         brightness = float(np.mean(img_np))
-        green_blue_ratio = color_dist.get("green", 0) + color_dist.get("blue", 0)
-        is_outdoor = green_blue_ratio > 0.35 or color_dist.get("white", 0) > 0.40
+        scene_type = "general scene"
+        is_outdoor = None
+
+        if not self.use_mock:
+            scene_candidates = [
+                "an outdoor nature, park, or landscape scene",
+                "an urban city street scene",
+                "an indoor room, office, or kitchen"
+            ]
+            probs = self.registry.run_clip_attribute_classification(pil_image, scene_candidates)
+            if probs:
+                top_scene = max(probs.items(), key=lambda x: x[1])[0]
+                scene_type = top_scene
+                is_outdoor = "outdoor" in top_scene or "urban" in top_scene
 
         features: Dict[str, Any] = {
             "image_obj": pil_image,
@@ -72,10 +84,10 @@ class AutomatedImageProcessor:
             "color_distribution": color_dist,
             "dominant_color": dominant_color,
             "scene": {
-                "type": "outdoor" if is_outdoor else "indoor",
-                "is_outdoor": is_outdoor,
-                "brightness": round(brightness, 2),
-                "is_uncertain": False
+                "type": scene_type,
+                "is_outdoor": is_outdoor if is_outdoor is not None else False,
+                "is_uncertain": is_outdoor is None,
+                "brightness": round(brightness, 2)
             }
         }
 
