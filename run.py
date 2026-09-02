@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Entry point for running VGuard CLI or starting the FastAPI server.
+Entry point for running VisionGuard CLI or starting the FastAPI server.
 """
 
 from visionguard.cli import main

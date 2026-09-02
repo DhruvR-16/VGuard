@@ -1,255 +1,343 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VGuard | Multi-Evidence Hallucination Detection & Benchmark Suite</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>
+      VisionGuard | Multi-Evidence Hallucination Detection & Benchmark Suite
+    </title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <link rel="stylesheet" href="styles.css">
-</head>
-<body>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
     <!-- Top Navigation Header -->
     <header class="app-header">
-        <div class="logo-container">
-            <div class="logo-text">
-                <h1>VGuard</h1>
-                <p>Claim-Aware Multi-Evidence Hallucination Detection Engine</p>
-            </div>
+      <div class="logo-container">
+        <div class="logo-text">
+          <h1>VisionGuard</h1>
+          <p>Claim-Aware Multi-Evidence Hallucination Detection Engine</p>
         </div>
-        <nav class="nav-tabs">
-            <button class="nav-tab active" data-tab="playground">CAM-V Playground</button>
-            <button class="nav-tab" data-tab="hqm">HQM Framework</button>
-            <button class="nav-tab" data-tab="leaderboard">8D Leaderboard</button>
-            <button class="nav-tab" data-tab="ablation">Baselines & Ablation</button>
-            <button class="nav-tab" data-tab="guardrail">Live Guardrail</button>
-        </nav>
+      </div>
+      <nav class="nav-tabs">
+        <button class="nav-tab active" data-tab="playground">
+          CAM-V Playground
+        </button>
+        <button class="nav-tab" data-tab="hqm">HQM Framework</button>
+        <button class="nav-tab" data-tab="leaderboard">8D Leaderboard</button>
+        <button class="nav-tab" data-tab="ablation">
+          Baselines & Ablation
+        </button>
+        <button class="nav-tab" data-tab="guardrail">Live Guardrail</button>
+      </nav>
     </header>
 
     <main class="app-content">
-        <!-- TAB 1: LIVE CAM-V PLAYGROUND -->
-        <section id="tab-playground" class="tab-panel active">
-            <div class="panel-grid">
-                <!-- Input Panel -->
-                <div class="card input-card">
-                    <div class="card-header">
-                        <h2>1. Upload Image & Caption Context</h2>
-                    </div>
-
-                    <!-- Drag & Drop Zone -->
-                    <div class="drop-zone" id="drop-zone">
-                        <div class="drop-zone-content">
-                            <p class="drop-title">Drag and drop an image file here</p>
-                            <p class="drop-subtitle">Supports JPG, PNG, WebP (or click to browse)</p>
-                            <input type="file" id="file-input" accept="image/*" class="file-input-hidden">
-                        </div>
-                        <div id="image-preview-container" class="image-preview-container hidden">
-                            <img id="image-preview" src="" alt="Uploaded preview">
-                            <span id="file-name-label" class="file-name-label"></span>
-                            <button id="btn-remove-image" class="btn btn-sm btn-outline" style="margin-top: 0.5rem;">Remove Image</button>
-                        </div>
-                    </div>
-
-                    <div class="preset-buttons">
-                        <span class="preset-label">Sample Presets:</span>
-                        <button class="btn btn-sm btn-outline" id="preset-1">Boy Riding Bike</button>
-                        <button class="btn btn-sm btn-outline" id="preset-2">Dog in Paris</button>
-                        <button class="btn btn-sm btn-outline" id="preset-3">Alien Flying Car</button>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="response-input">VLM Response / Caption (Optional - auto-generated if blank):</label>
-                        <textarea id="response-input" class="form-control" rows="3" placeholder="Enter VLM generated text to analyze..."></textarea>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="fusion-mode">Evidence Fusion Engine:</label>
-                        <select id="fusion-mode" class="form-control">
-                            <option value="weighted">Weighted Fusion (Claim-Dependent)</option>
-                            <option value="learned">Learned ML Fusion (Calibrated Logistic Regression)</option>
-                        </select>
-                    </div>
-
-                    <button id="btn-analyze" class="btn btn-primary btn-block btn-lg">
-                        Run CAM-V Analysis
-                    </button>
-                </div>
-
-                <!-- Analysis Summary Panel -->
-                <div class="card summary-card">
-                    <div class="card-header">
-                        <h2>2. Verdict & Decomposed Metrics</h2>
-                    </div>
-
-                    <div class="verdict-banner" id="verdict-banner">
-                        <div class="verdict-title" id="overall-verdict">Awaiting Analysis</div>
-                        <div class="verdict-subtitle" id="overall-confidence">Upload an image or select a sample to begin.</div>
-                    </div>
-
-                    <div class="metrics-grid">
-                        <div class="metric-box">
-                            <div class="metric-value" id="main-hal-rate">0.0%</div>
-                            <div class="metric-label">Main Hal%</div>
-                        </div>
-                        <div class="metric-box">
-                            <div class="metric-value" id="extra-hal-count">0.0</div>
-                            <div class="metric-label">Extra #Hal</div>
-                        </div>
-                        <div class="metric-box">
-                            <div class="metric-value" id="overall-hal-rate">0.0%</div>
-                            <div class="metric-label">Overall Hal%</div>
-                        </div>
-                    </div>
-
-                    <div class="verdict-counts-bar" id="verdict-counts-bar"></div>
-                </div>
+      <!-- TAB 1: LIVE CAM-V PLAYGROUND -->
+      <section id="tab-playground" class="tab-panel active">
+        <div class="panel-grid">
+          <!-- Input Panel -->
+          <div class="card input-card">
+            <div class="card-header">
+              <h2>1. Upload Image & Caption Context</h2>
             </div>
 
-            <!-- Claim Decomposition Graph Flow -->
-            <div class="card flow-card">
-                <div class="card-header">
-                    <h2>3. Atomic Claim Decomposition & Evidence Verification</h2>
-                </div>
-                <div class="claims-list-container" id="claims-container">
-                    <p class="placeholder-text">Upload an image or enter a caption to view decomposed atomic claims and multi-verifier evidence.</p>
-                </div>
+            <!-- Drag & Drop Zone -->
+            <div class="drop-zone" id="drop-zone">
+              <div class="drop-zone-content">
+                <p class="drop-title">Drag and drop an image file here</p>
+                <p class="drop-subtitle">
+                  Supports JPG, PNG, WebP (or click to browse)
+                </p>
+                <input
+                  type="file"
+                  id="file-input"
+                  accept="image/*"
+                  class="file-input-hidden"
+                />
+              </div>
+              <div
+                id="image-preview-container"
+                class="image-preview-container hidden"
+              >
+                <img id="image-preview" src="" alt="Uploaded preview" />
+                <span id="file-name-label" class="file-name-label"></span>
+                <button
+                  id="btn-remove-image"
+                  class="btn btn-sm btn-outline"
+                  style="margin-top: 0.5rem"
+                >
+                  Remove Image
+                </button>
+              </div>
             </div>
-        </section>
 
-        <!-- TAB 2: HQM FRAMEWORK -->
-        <section id="tab-hqm" class="tab-panel">
-            <div class="card">
-                <div class="card-header">
-                    <h2>HQM Benchmark Quality Evaluation Framework</h2>
-                    <p class="section-desc">Assess benchmark quality using psychometric indicators: Reliability (Test-Retest & Parallel-Forms) and Validity (Content & Criterion).</p>
-                </div>
-                
-                <div class="table-responsive">
-                    <table class="data-table" id="hqm-table">
-                        <thead>
-                            <tr>
-                                <th>Benchmark</th>
-                                <th>Task Type</th>
-                                <th>Metric</th>
-                                <th>Test-Retest Reliability</th>
-                                <th>Parallel-Forms Reliability</th>
-                                <th>Content Validity</th>
-                                <th>Criterion Validity</th>
-                            </tr>
-                        </thead>
-                        <tbody></tbody>
-                    </table>
-                </div>
-
-                <div class="insights-grid">
-                    <div class="insight-card border-indigo">
-                        <h3>Parallel-Forms Robustness</h3>
-                        <p>Closed-ended benchmarks (POPE, AMBER-d) drop to <strong>0.35-0.36</strong> parallel-forms reliability due to model response bias. HQH achieves <strong>0.9856</strong> reliability.</p>
-                    </div>
-                    <div class="insight-card border-emerald">
-                        <h3>Criterion Validity Alignment</h3>
-                        <p>Open-ended scoring LLMs often fail human alignment. Decomposed matching in HQH achieves <strong>0.9556</strong> criterion validity correlation with human judgment.</p>
-                    </div>
-                </div>
+            <div class="preset-buttons">
+              <span class="preset-label">Sample Presets:</span>
+              <button class="btn btn-sm btn-outline" id="preset-1">
+                Boy Riding Bike
+              </button>
+              <button class="btn btn-sm btn-outline" id="preset-2">
+                Dog in Paris
+              </button>
+              <button class="btn btn-sm btn-outline" id="preset-3">
+                Alien Flying Car
+              </button>
             </div>
-        </section>
 
-        <!-- TAB 3: HQH LEADERBOARD -->
-        <section id="tab-leaderboard" class="tab-panel">
-            <div class="card">
-                <div class="card-header">
-                    <h2>HQH 8-Dimension Perceptual Leaderboard</h2>
-                    <p class="section-desc">Evaluation of mainstream LVLMs across 8 fine-grained visual dimensions (lower hallucination rate is better).</p>
-                </div>
-                
-                <div class="chart-container-large">
-                    <canvas id="radarChart"></canvas>
-                </div>
-
-                <div class="table-responsive" style="margin-top: 2rem;">
-                    <table class="data-table" id="leaderboard-table">
-                        <thead>
-                            <tr>
-                                <th>Rank</th>
-                                <th>Model</th>
-                                <th>Main Hal% ↓</th>
-                                <th>Extra #Hal ↓</th>
-                                <th>Overall Hal% ↓</th>
-                                <th>Object Existence</th>
-                                <th>Spatial Relation</th>
-                                <th>Environment</th>
-                            </tr>
-                        </thead>
-                        <tbody></tbody>
-                    </table>
-                </div>
+            <div class="form-group">
+              <label for="response-input"
+                >VLM Response / Caption (Optional - auto-generated if
+                blank):</label
+              >
+              <textarea
+                id="response-input"
+                class="form-control"
+                rows="3"
+                placeholder="Enter VLM generated text to analyze..."
+              ></textarea>
             </div>
-        </section>
 
-        <!-- TAB 4: ABLATION & BASELINES -->
-        <section id="tab-ablation" class="tab-panel">
-            <div class="panel-grid">
-                <div class="card">
-                    <div class="card-header">
-                        <h2>Method Comparison vs Baselines</h2>
-                    </div>
-                    <div class="chart-container">
-                        <canvas id="baselineChart"></canvas>
-                    </div>
-                </div>
-                <div class="card">
-                    <div class="card-header">
-                        <h2>Section 14 Ablation Study</h2>
-                    </div>
-                    <div class="chart-container">
-                        <canvas id="ablationChart"></canvas>
-                    </div>
-                    <div class="ablation-summary">
-                        <p><strong>Key Insight:</strong> Claim-aware routing and specialized multi-evidence fusion yield a <strong>+18.5% F1 score improvement</strong> over monolithic VLM verification.</p>
-                    </div>
-                </div>
+            <div class="form-group">
+              <label for="fusion-mode">Evidence Fusion Engine:</label>
+              <select id="fusion-mode" class="form-control">
+                <option value="weighted">
+                  Weighted Fusion (Claim-Dependent)
+                </option>
+                <option value="learned">
+                  Learned ML Fusion (Calibrated Logistic Regression)
+                </option>
+              </select>
             </div>
-        </section>
 
-        <!-- TAB 5: VGUARD LIVE DEFENSE -->
-        <section id="tab-guardrail" class="tab-panel">
-            <div class="card">
-                <div class="card-header">
-                    <h2>VGuard Real-Time Hallucination Defense & Guardrail</h2>
-                    <p class="section-desc">Active hallucination mitigation combining Task Identifier prompt decoration ([vqa]) and post-verification claim stripping.</p>
-                </div>
-                
-                <div class="panel-grid">
-                    <div class="card sub-card">
-                        <h3>Input Prompt & Raw Response</h3>
-                        <div class="form-group">
-                            <label>Prompt:</label>
-                            <input type="text" id="gr-prompt" class="form-control" value="What is the dog doing near the bicycle in Paris?">
-                        </div>
-                        <div class="form-group">
-                            <label>Model Raw Response:</label>
-                            <textarea id="gr-response" class="form-control" rows="4">A brown dog is sitting beside a red bicycle in Paris. The dog is wearing a coat and looking at a cat.</textarea>
-                        </div>
-                        <button id="btn-apply-guardrail" class="btn btn-primary btn-block">Apply VGuard Defense</button>
-                    </div>
+            <button id="btn-analyze" class="btn btn-primary btn-block btn-lg">
+              Run CAM-V Analysis
+            </button>
+          </div>
 
-                    <div class="card sub-card">
-                        <h3>VGuard Mitigated Output</h3>
-                        <div class="output-box" id="gr-output">
-                            <div class="muted-text">Click Apply VGuard Defense to see mitigated response.</div>
-                        </div>
-                    </div>
-                </div>
+          <!-- Analysis Summary Panel -->
+          <div class="card summary-card">
+            <div class="card-header">
+              <h2>2. Verdict & Decomposed Metrics</h2>
             </div>
-        </section>
+
+            <div class="verdict-banner" id="verdict-banner">
+              <div class="verdict-title" id="overall-verdict">
+                Awaiting Analysis
+              </div>
+              <div class="verdict-subtitle" id="overall-confidence">
+                Upload an image or select a sample to begin.
+              </div>
+            </div>
+
+            <div class="metrics-grid">
+              <div class="metric-box">
+                <div class="metric-value" id="main-hal-rate">0.0%</div>
+                <div class="metric-label">Main Hal%</div>
+              </div>
+              <div class="metric-box">
+                <div class="metric-value" id="extra-hal-count">0.0</div>
+                <div class="metric-label">Extra #Hal</div>
+              </div>
+              <div class="metric-box">
+                <div class="metric-value" id="overall-hal-rate">0.0%</div>
+                <div class="metric-label">Overall Hal%</div>
+              </div>
+            </div>
+
+            <div class="verdict-counts-bar" id="verdict-counts-bar"></div>
+          </div>
+        </div>
+
+        <!-- Claim Decomposition Graph Flow -->
+        <div class="card flow-card">
+          <div class="card-header">
+            <h2>3. Atomic Claim Decomposition & Evidence Verification</h2>
+          </div>
+          <div class="claims-list-container" id="claims-container">
+            <p class="placeholder-text">
+              Upload an image or enter a caption to view decomposed atomic
+              claims and multi-verifier evidence.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 2: HQM FRAMEWORK -->
+      <section id="tab-hqm" class="tab-panel">
+        <div class="card">
+          <div class="card-header">
+            <h2>HQM Benchmark Quality Evaluation Framework</h2>
+            <p class="section-desc">
+              Assess benchmark quality using psychometric indicators:
+              Reliability (Test-Retest & Parallel-Forms) and Validity (Content &
+              Criterion).
+            </p>
+          </div>
+
+          <div class="table-responsive">
+            <table class="data-table" id="hqm-table">
+              <thead>
+                <tr>
+                  <th>Benchmark</th>
+                  <th>Task Type</th>
+                  <th>Metric</th>
+                  <th>Test-Retest Reliability</th>
+                  <th>Parallel-Forms Reliability</th>
+                  <th>Content Validity</th>
+                  <th>Criterion Validity</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+
+          <div class="insights-grid">
+            <div class="insight-card border-indigo">
+              <h3>Parallel-Forms Robustness</h3>
+              <p>
+                Closed-ended benchmarks (POPE, AMBER-d) drop to
+                <strong>0.35-0.36</strong> parallel-forms reliability due to
+                model response bias. HQH achieves
+                <strong>0.9856</strong> reliability.
+              </p>
+            </div>
+            <div class="insight-card border-emerald">
+              <h3>Criterion Validity Alignment</h3>
+              <p>
+                Open-ended scoring LLMs often fail human alignment. Decomposed
+                matching in HQH achieves <strong>0.9556</strong> criterion
+                validity correlation with human judgment.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 3: HQH LEADERBOARD -->
+      <section id="tab-leaderboard" class="tab-panel">
+        <div class="card">
+          <div class="card-header">
+            <h2>HQH 8-Dimension Perceptual Leaderboard</h2>
+            <p class="section-desc">
+              Evaluation of mainstream LVLMs across 8 fine-grained visual
+              dimensions (lower hallucination rate is better).
+            </p>
+          </div>
+
+          <div class="chart-container-large">
+            <canvas id="radarChart"></canvas>
+          </div>
+
+          <div class="table-responsive" style="margin-top: 2rem">
+            <table class="data-table" id="leaderboard-table">
+              <thead>
+                <tr>
+                  <th>Rank</th>
+                  <th>Model</th>
+                  <th>Main Hal% ↓</th>
+                  <th>Extra #Hal ↓</th>
+                  <th>Overall Hal% ↓</th>
+                  <th>Object Existence</th>
+                  <th>Spatial Relation</th>
+                  <th>Environment</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 4: ABLATION & BASELINES -->
+      <section id="tab-ablation" class="tab-panel">
+        <div class="panel-grid">
+          <div class="card">
+            <div class="card-header">
+              <h2>Method Comparison vs Baselines</h2>
+            </div>
+            <div class="chart-container">
+              <canvas id="baselineChart"></canvas>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header">
+              <h2>Section 14 Ablation Study</h2>
+            </div>
+            <div class="chart-container">
+              <canvas id="ablationChart"></canvas>
+            </div>
+            <div class="ablation-summary">
+              <p>
+                <strong>Key Insight:</strong> Claim-aware routing and
+                specialized multi-evidence fusion yield a
+                <strong>+18.5% F1 score improvement</strong> over monolithic VLM
+                verification.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 5: VisionGuard LIVE DEFENSE -->
+      <section id="tab-guardrail" class="tab-panel">
+        <div class="card">
+          <div class="card-header">
+            <h2>VisionGuard Real-Time Hallucination Defense & Guardrail</h2>
+            <p class="section-desc">
+              Active hallucination mitigation combining Task Identifier prompt
+              decoration ([vqa]) and post-verification claim stripping.
+            </p>
+          </div>
+
+          <div class="panel-grid">
+            <div class="card sub-card">
+              <h3>Input Prompt & Raw Response</h3>
+              <div class="form-group">
+                <label>Prompt:</label>
+                <input
+                  type="text"
+                  id="gr-prompt"
+                  class="form-control"
+                  value="What is the dog doing near the bicycle in Paris?"
+                />
+              </div>
+              <div class="form-group">
+                <label>Model Raw Response:</label>
+                <textarea id="gr-response" class="form-control" rows="4">
+A brown dog is sitting beside a red bicycle in Paris. The dog is wearing a coat and looking at a cat.</textarea
+                >
+              </div>
+              <button
+                id="btn-apply-guardrail"
+                class="btn btn-primary btn-block"
+              >
+                Apply VisionGuard Defense
+              </button>
+            </div>
+
+            <div class="card sub-card">
+              <h3>VisionGuard Mitigated Output</h3>
+              <div class="output-box" id="gr-output">
+                <div class="muted-text">
+                  Click Apply VisionGuard Defense to see mitigated response.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
     </main>
 
     <footer class="app-footer">
-        <p>VisionGuard Framework • Claim-Aware Multi-Evidence Verification</p>
+      <p>VisionGuard Framework • Claim-Aware Multi-Evidence Verification</p>
     </footer>
 
     <script src="app.js"></script>
-</body>
+  </body>
 </html>

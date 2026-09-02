@@ -27,7 +27,7 @@ from visionguard.data_loader import (
 )
 
 app = FastAPI(
-    title="VGuard CAM-V API",
+    title="VisionGuard CAM-V API",
     description="Claim-Aware Multi-Evidence Detection, Response Repair & Psychometric Quality Evaluation for LVLMs",
     version=__version__
 )
